@@ -50,35 +50,44 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `port` | No | `502` | Modbus TCP port of the server |
 | `bind_port` | **Yes** | - | Local port where proxy will listen |
 | `modbus_id` | No | `1` | Modbus unit/slave ID |
+| `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID (e.g., `1: 10`) |
 | `timeout` | No | `10.0` | Connection timeout in seconds |
 | `connection_time` | No | `2.0` | Time to establish connection in seconds |
 | `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
 
 ### Advanced Configuration Examples
 
-#### Multiple Solar Inverters
+#### Unit ID Remapping
+
+The `unit_id_remapping` feature allows you to map incoming unit IDs to different target unit IDs on the Modbus server. This is useful when:
+
+- Your Modbus client expects a specific unit ID (e.g., 1)
+- The actual Modbus server has the device on a different unit ID (e.g., 10)
+- You want to virtualize unit IDs for different clients
+
+**Example:** `unit_id_remapping: {1: 10}` means:
+- When a client sends a request to unit ID 1, it gets forwarded to unit ID 10 on the server
+- All responses from unit ID 10 appear as if they came from unit ID 1
+
+**Note:** Each device can only have one remapping configuration.
+
+#### Multiple Solar Inverters with Unit ID Remapping
 ```yaml
-- name: "Inverter 1"
-  host: "192.168.1.100"
-  port: 502
-  bind_port: 502
-  modbus_id: 1
-  timeout: 10.0
-  connection_time: 2.0
-- name: "Inverter 2"
-  host: "192.168.1.101"
-  port: 502
-  bind_port: 503
-  modbus_id: 1
-  timeout: 10.0
-  connection_time: 2.0
-- name: "Inverter 3"
-  host: "192.168.1.102"
-  port: 502
-  bind_port: 504
-  modbus_id: 1
-  timeout: 10.0
-  connection_time: 2.0
+modbus_devices:
+  - name: "Inverter 1"
+    host: "192.168.1.100"
+    port: 502
+    bind_port: 503
+    timeout: 10.0
+    connection_time: 2.0
+  - name: "Inverter 2"
+    host: "192.168.1.101"
+    bind_port: 504
+    timeout: 10.0
+    connection_time: 2.0
+  - name: "Inverter 3"
+    host: "192.168.1.102"
+    bind_port: 505
 ```
 
 ## Usage
@@ -195,13 +204,3 @@ This add-on is based on:
 See the [LICENSE](LICENSE) file for details.
 
 ---
-
-[aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
-[amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
-[armhf-shield]: https://img.shields.io/badge/armhf-yes-green.svg
-[armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg
-[commits-shield]: https://img.shields.io/github/commit-activity/y/TCzerny/ha-modbusproxy.svg
-[commits]: https://github.com/TCzerny/ha-modbusproxy/commits/main
-[license-shield]: https://img.shields.io/github/license/TCzerny/ha-modbusproxy.svg
-[releases-shield]: https://img.shields.io/github/release/TCzerny/ha-modbusproxy.svg
-[releases]: https://github.com/TCzerny/ha-modbusproxy/releases

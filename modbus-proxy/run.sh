@@ -9,7 +9,7 @@ if [ -z "$LOG_LEVEL" ] || [ "$LOG_LEVEL" = "null" ]; then
     LOG_LEVEL="info"
 fi
 
-echo "🔧 Configuration is being generated..."
+echo "🔧 Generating configuration..."
 echo "📊 Log Level: $LOG_LEVEL"
 
 # Create base configuration
@@ -28,7 +28,7 @@ devices:
 EOF
 
 # Read device configuration from HA
-echo "📋 Read Modbus device configuration..."
+echo "📋 Reading Modbus device configuration..."
 
 # Count devices and add them
 DEVICE_COUNT=0
@@ -90,6 +90,14 @@ EOF
         echo "    modbus_id: $MODBUS_ID_VAL" >> "$CONFIG_PATH"
     fi
     
+    # Add unit_id_remapping if configured
+    UNIT_ID_REMAPPING=$(bashio::config "modbus_devices[${DEVICE_COUNT}].unit_id_remapping" "" 2>/dev/null || echo "")
+    if [ -n "$UNIT_ID_REMAPPING" ] && [ "$UNIT_ID_REMAPPING" != "null" ]; then
+        echo "    unit_id_remapping:" >> "$CONFIG_PATH"
+        # Parse the remapping JSON and extract key-value pairs
+        echo "$UNIT_ID_REMAPPING" | jq -r 'to_entries[] | "      " + (.key | tostring) + ": " + (.value | tostring)' >> "$CONFIG_PATH"
+    fi
+    
     DEVICE_COUNT=$((DEVICE_COUNT+1))
     VALID_DEVICES=$((VALID_DEVICES+1))
 done
@@ -107,7 +115,6 @@ cat "$CONFIG_PATH"
 
 # Activate venv if exists
 if [ -f "/srv/venv/bin/activate" ]; then
-    echo "🔄 Activate Python venv..."
     source /srv/venv/bin/activate
 fi
 

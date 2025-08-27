@@ -1,5 +1,5 @@
 name: "Modbus Proxy"
-version: "2.0.0"
+version: "2.1.0"
 slug: "modbus_proxy"
 description: "A powerful multi-device Modbus TCP proxy"
 arch:
@@ -17,9 +17,16 @@ options:
       host: "192.168.1.100"
       port: 502
       bind_port: 502
-      modbus_id: 1
       timeout: 10.0
       connection_time: 2.0
+    - name: "Solar Inverter 2"
+      host: "192.168.1.101"
+      bind_port: 504
+      timeout: 10.0
+      connection_time: 2.0
+    - name: "Energy Meter"
+      host: "192.168.1.102"
+      bind_port: 505
   log_level: "info"
 schema:
   log_level: "list(info|warning|error|debug)?"
@@ -28,6 +35,6 @@ schema:
       host: "str"
       port: "port?"
       bind_port: "port"
-      modbus_id: "int?"
+      unit_id_remapping: "map(int,int)?"
       timeout: "float?"
       connection_time: "float?"

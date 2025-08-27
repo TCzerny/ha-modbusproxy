@@ -1,29 +1,262 @@
-# Home Assistant AddOn Modbus Proxy
- 
-Usally one modbus server only allows a single connection and denies any more clients. 
-With this Addon you can create a proxy which can handle mutiple client connections at the same time. 
-Currently you can configure the Addon to establish a connection to three different Modbus Servers and provide the information to multiple clients through the respective listenport.
+# Home Assistant Add-on: Modbus Proxy Plus
 
-The addon is only tested and compatible with hassio supervisor. 
+[![GitHub Release][releases-shield]][releases]
+[![GitHub Activity][commits-shield]][commits]
+[![License][license-shield]](LICENSE)
+
+![Supports aarch64 Architecture][aarch64-shield]
+![Supports amd64 Architecture][amd64-shield]
+![Supports armhf Architecture][armhf-shield]
+![Supports armv7 Architecture][armv7-shield]
+
+A powerful multi-device Modbus TCP proxy for Home Assistant that allows multiple clients to connect to Modbus servers that typically only support a single connection.
+
+## About
+
+Most Modbus TCP servers only allow a single client connection and reject additional clients. This add-on creates a proxy that can handle multiple client connections simultaneously while maintaining a single connection to each Modbus server.
+
+**Key Features:**
+- 🔄 Multiple client connections to single Modbus server
+- 🌐 Support for multiple Modbus devices
+- ⚙️ Easy configuration through Home Assistant UI
+- 🔧 Configurable timeouts and connection parameters
+- 📊 Built-in logging and monitoring
+- 🚀 Host network mode for optimal performance
 
 ## Installation
+
+### Method 1: One-Click Installation (Recommended)
+
 [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FTCzerny%2Fha-modbusproxy)
-- Add This [Repository](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FTCzerny%2Fha-modbusproxy) (Or click Button above)
-- Install ModBusProxy from the Add-On Store
+
+### Method 2: Manual Installation
+
+1. Navigate to **Supervisor** → **Add-on Store** in your Home Assistant
+2. Click the **⋮** menu in the top right corner
+3. Select **Repositories**
+4. Add this repository URL: `https://github.com/TCzerny/ha-modbusproxy`
+5. Find **Modbus Proxy Plus** in the add-on store
+6. Click **Install**
 
 ## Configuration
-- Stop all Clients that currently connect to the modbus servers. The Server might need some time before another client (our proxy) can connect.
-  - In case you are using solaredge-modbus in homeassistant you can change the server address here: /config/.storage/core.config_entries. 
-- Before starting go to the configuration page and set the ip of your modbus server. 
-- Start The Add-On (This may take a while on the first start as it builds the cointainer locally)
-- Configure Your Clients to connect to your HA IP and choosen listenport.
 
-### Configuration Tab
-<img width="519" alt="config" src="https://github.com/TCzerny/ha-modbusproxy/assets/13466867/83fcd817-ba37-4196-8cb2-9bf1fe131833">
+### Basic Configuration Example
 
-## Mentions
-This addon is a fork from the original addon of Akulatraxas
-- https://github.com/Akulatraxas/ha-modbusproxy
+```yaml
+modbus_devices:
+  - name: "Solar Inverter"
+    host: "192.168.1.100"
+    port: 502
+    bind_port: 5020
+    modbus_id: 1
+    timeout: 10.0
+    connection_time: 2.0
+  - name: "Energy Meter"
+    host: "192.168.1.101"
+    port: 502
+    bind_port: 5021
+    modbus_id: 1
+    timeout: 5.0
+    connection_time: 1.0
+log_level: "info"
+```
 
-This addon uses the modbus-proxy of tiagocoutinho:
-- https://github.com/tiagocoutinho/modbus-proxy
+### Configuration Parameters
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `name` | No | `Device X` | Friendly name for the device |
+| `host` | **Yes** | - | IP address of the Modbus server |
+| `port` | No | `502` | Modbus TCP port of the server |
+| `bind_port` | **Yes** | - | Local port where proxy will listen |
+| `modbus_id` | No | `1` | Modbus unit/slave ID |
+| `timeout` | No | `10.0` | Connection timeout in seconds |
+| `connection_time` | No | `2.0` | Time to establish connection in seconds |
+| `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
+
+### Advanced Configuration Examples
+
+#### Multiple Solar Inverters
+```yaml
+modbus_devices:
+  - name: "Inverter 1"
+    host: "192.168.1.100"
+    port: 502
+    bind_port: 5020
+    modbus_id: 1
+  - name: "Inverter 2"
+    host: "192.168.1.101"
+    port: 502
+    bind_port: 5021
+    modbus_id: 1
+  - name: "Inverter 3"
+    host: "192.168.1.102"
+    port: 502
+    bind_port: 5022
+    modbus_id: 1
+log_level: "debug"
+```
+
+#### Different Modbus Ports
+```yaml
+modbus_devices:
+  - name: "Device with custom port"
+    host: "192.168.1.200"
+    port: 1502
+    bind_port: 5030
+    modbus_id: 2
+    timeout: 15.0
+```
+
+## Usage
+
+### Step 1: Stop Existing Clients
+Before starting the proxy, stop all clients currently connected to your Modbus servers. The server needs time to release existing connections.
+
+**For SolarEdge Modbus integration:**
+1. Go to **Settings** → **Devices & Services**
+2. Find your SolarEdge integration
+3. Click **Configure**
+4. Temporarily disable or change the host
+
+### Step 2: Configure the Add-on
+1. Go to **Supervisor** → **Modbus Proxy Plus**
+2. Click the **Configuration** tab
+3. Add your Modbus devices using the examples above
+4. Click **Save**
+
+### Step 3: Start the Add-on
+1. Click the **Info** tab
+2. Click **Start**
+3. Monitor the logs for successful connections
+
+### Step 4: Update Your Clients
+Configure your Modbus clients to connect to:
+- **Host:** Your Home Assistant IP address
+- **Port:** The `bind_port` you configured for each device
+
+## Troubleshooting
+
+### Common Issues
+
+#### "Address already in use" Error
+```
+OSError: [Errno 98] error while attempting to bind on address ('0.0.0.0', 5020): address in use
+```
+**Solution:** Change the `bind_port` to an unused port (e.g., 5025, 5030, etc.)
+
+#### "Connection refused" Error
+```
+Connection refused to 192.168.1.100:502
+```
+**Solutions:**
+1. Verify the Modbus server IP address and port
+2. Ensure the Modbus server is running and accessible
+3. Check firewall settings on both devices
+4. Stop other clients connected to the Modbus server
+
+#### "Timeout" Errors
+**Solutions:**
+1. Increase the `timeout` value in configuration
+2. Increase the `connection_time` value
+3. Check network connectivity and latency
+
+### Debugging
+
+Enable debug logging to get more detailed information:
+
+```yaml
+log_level: "debug"
+```
+
+Then check the add-on logs:
+1. Go to **Supervisor** → **Modbus Proxy Plus**
+2. Click the **Log** tab
+3. Look for connection attempts and error messages
+
+### Network Configuration
+
+This add-on uses `host_network: true` which means:
+- ✅ Direct access to host network interfaces
+- ✅ No need to configure port mappings in add-on settings
+- ✅ Optimal performance with minimal network overhead
+- ⚠️ Ports must be unique across all services on your host
+
+## Integration Examples
+
+### Home Assistant Energy Dashboard
+
+After setting up the proxy, configure your energy monitoring:
+
+```yaml
+# configuration.yaml
+modbus:
+  - name: "solar_inverter"
+    type: tcp
+    host: 192.168.1.xxx  # Your HA IP
+    port: 5020           # Your bind_port
+    sensors:
+      - name: "Solar Power"
+        unit_of_measurement: W
+        slave: 1
+        address: 40083
+        data_type: uint16
+        scale: 0.1
+```
+
+### SolarEdge Integration
+
+Update your SolarEdge Modbus configuration:
+1. **Host:** Your Home Assistant IP
+2. **Port:** Your configured `bind_port` (e.g., 5020)
+3. **Device ID:** Keep your original device ID
+
+## Support
+
+### Getting Help
+
+1. **Check the logs** first for error messages
+2. **Review this README** for configuration examples
+3. **Search existing issues** on GitHub
+4. **Create a new issue** with:
+   - Your configuration (remove sensitive data)
+   - Complete log output
+   - Description of the problem
+
+### Reporting Issues
+
+When reporting issues, please include:
+
+```yaml
+# Your anonymized configuration
+modbus_devices:
+  - name: "Device 1"
+    host: "192.168.1.XXX"  # Replace with XXX
+    port: 502
+    bind_port: 5020
+# ... rest of config
+```
+
+And the complete log output from the add-on.
+
+## Credits
+
+This add-on is based on:
+- **Original add-on:** [Akulatraxas/ha-modbusproxy](https://github.com/Akulatraxas/ha-modbusproxy)
+- **Modbus Proxy Library:** [tiagocoutinho/modbus-proxy](https://github.com/tiagocoutinho/modbus-proxy)
+
+## License
+
+MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+[aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
+[amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
+[armhf-shield]: https://img.shields.io/badge/armhf-yes-green.svg
+[armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg
+[commits-shield]: https://img.shields.io/github/commit-activity/y/TCzerny/ha-modbusproxy.svg
+[commits]: https://github.com/TCzerny/ha-modbusproxy/commits/main
+[license-shield]: https://img.shields.io/github/license/TCzerny/ha-modbusproxy.svg
+[releases-shield]: https://img.shields.io/github/release/TCzerny/ha-modbusproxy.svg
+[releases]: https://github.com/TCzerny/ha-modbusproxy/releases

@@ -14,14 +14,14 @@ RUN cd /srv && python3 -m venv venv
 RUN cd /srv && source ./venv/bin/activate && \
     pip install modbus-proxy PyYAML
 
+# Add venv to PATH
+ENV PATH="/srv/venv/bin:$PATH"
 
 # Copy data for add-on
 WORKDIR /
 COPY run.sh /
 COPY rootfs /
 WORKDIR /srv
-
-
 
 RUN chmod a+x /run.sh
 CMD [ "/run.sh" ]

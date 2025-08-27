@@ -1,7 +1,7 @@
-name: "modbus-proxy"
-description: "Proxy for Accessing three modbus systems."
-version: "1.0.0"
-slug: "modbus_proxy"
+name: "Modbus Proxy Plus"
+version: "2.1.0"
+slug: "modbus-proxy-plus"
+description: "Mehrgeräte-Modbus-Proxy (tiagocoutinho/modbus-proxy) mit UI-Konfiguration"
 arch:
   - aarch64
   - amd64
@@ -10,45 +10,24 @@ arch:
 url: "https://github.com/TCzerny/ha-modbusproxy"
 startup: services
 init: false
+host_network: true
 options:
-  upstreamhost: "192.168.178.100"
-  upstreamport: 502
-  listenport: 502
-  connection_time: 0.1
-  timeout: 10
-  enablehost2: true
-  upstreamhost2: "192.168.178.101"
-  upstreamport2: 502
-  listenport2: 503
-  connection_time2: 0.1
-  timeout2: 10
-  enablehost3: true
-  upstreamhost3: "192.168.178.102"
-  upstreamport3: 502
-  listenport3: 504
-  connection_time3: 0.1
-  timeout3: 10
-  loglevel: "INFO"
+  modbus_devices:
+    - name: "Beispiel Gerät"
+      host: "192.168.1.100"
+      port: 502
+      bind_port: 502
+      modbus_id: 1
+      timeout: 10.0
+      connection_time: 2.0
+  log_level: "info"
 schema:
-  upstreamhost: str
-  upstreamport: int
-  listenport: int
-  connection_time: float
-  timeout: int
-  enablehost2: bool
-  upstreamhost2: str
-  upstreamport2: int
-  listenport2: int
-  connection_time2: float
-  timeout2: int
-  enablehost3: bool
-  upstreamhost3: str
-  upstreamport3: int
-  listenport3: int
-  connection_time3: float
-  timeout3: int
-  loglevel: list(INFO|DEBUG|ERROR)
-ports:
-  502/tcp: 502
-  503/tcp: 503
-  504/tcp: 504
+  log_level: "list(info|warning|error|debug)?"
+  modbus_devices:
+    - name: "str?"
+      host: "str"
+      port: "port?"
+      bind_port: "port"
+      modbus_id: "int?"
+      timeout: "float?"
+      connection_time: "float?"

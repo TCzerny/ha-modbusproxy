@@ -1,6 +1,6 @@
 name: "Modbus Proxy"
 version: "2.0.0"
-slug: "modbus-proxy"
+slug: "modbus_proxy"
 description: "A powerful multi-device Modbus TCP proxy"
 arch:
   - aarch64

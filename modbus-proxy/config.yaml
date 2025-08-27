@@ -1,6 +1,6 @@
-name: "Modbus Proxy Repository"
+name: "Modbus Proxy Plus"
 version: "2.0.0"
-slug: "modbus-proxy"
+slug: "modbus-proxy-plus"
 description: "A powerful multi-device Modbus TCP proxy"
 arch:
   - aarch64
@@ -13,7 +13,7 @@ init: false
 host_network: true
 options:
   modbus_devices:
-    - name: "Beispiel Gerät"
+    - name: "Solar Inverter 1"
       host: "192.168.1.100"
       port: 502
       bind_port: 502

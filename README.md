@@ -28,7 +28,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 2. Click the **⋮** menu in the top right corner
 3. Select **Repositories**
 4. Add this repository URL: `https://github.com/TCzerny/ha-modbusproxy`
-5. Find **Modbus Proxy Repository** in the add-on store
+5. Find **Modbus Proxy Plus** in the add-on store
 6. Click **Install**
 
 ## Configuration
@@ -93,7 +93,7 @@ Before starting the proxy, stop all clients currently connected to your Modbus s
 4. Temporarily disable or change the host
 
 ### Step 2: Configure the Add-on
-1. Go to **Settings** → **Addons** → **Modbus Proxy Repository**
+1. Go to **Settings** → **Addons** → **Modbus Proxy Plus**
 2. Click the **Configuration** tab
 3. Add your Modbus devices using the examples above
 4. Click **Save**
@@ -143,7 +143,7 @@ log_level: "debug"
 ```
 
 Then check the add-on logs:
-1. Go to **Settings** → **Addons** → **Modbus Proxy Repository**
+1. Go to **Settings** → **Addons** → **Modbus Proxy Plus**
 2. Click the **Log** tab
 3. Look for connection attempts and error messages
 

@@ -1,4 +1,4 @@
-# Home Assistant Add-on: Modbus Proxy Plus
+# Home Assistant Add-on: Modbus Proxy
 
 [![License][license-shield]](LICENSE)
 
@@ -28,7 +28,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 2. Click the **⋮** menu in the top right corner
 3. Select **Repositories**
 4. Add this repository URL: `https://github.com/TCzerny/ha-modbusproxy`
-5. Find **Modbus Proxy Plus** in the add-on store
+5. Find **Modbus Proxy** in the add-on store
 6. Click **Install**
 
 ## Configuration
@@ -80,6 +80,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
   timeout: 10.0
   connection_time: 2.0
 ```
+<img width="1027" height="727" alt="image" src="https://github.com/user-attachments/assets/cdafcf9b-c521-4acb-a628-902217242466" />
 
 ## Usage
 

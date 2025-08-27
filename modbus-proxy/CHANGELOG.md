@@ -37,12 +37,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved Docker build efficiency
 - Better error handling and logging
 
-## [1.0.1] - Previous Release
+## [2.0.0] - Previous Release
+
+⚠️ **BREAKING CHANGES WARNING** ⚠️
+
+**IMPORTANT:** Version 2.0.0+ introduces a completely new configuration format that is **NOT compatible** with version 1.0.0 configurations.
+
+**Before upgrading from 1.0.0:**
+1. **Document your current settings** - Write down all your modbus device configurations from version 1.0.0
+2. **Read the new README** - Check the updated configuration examples and parameter documentation  
+3. **Reconfigure after upgrade** - You will need to completely reconfigure your modbus devices using the new format
+
+**What changed:**
+- Configuration parameter names and structure have changed
+- New dynamic device support with different syntax
+- Enhanced validation and error handling
 
 ### Added
-- Enhanced number of modbus devices support to three devices
+- Dynamic number of modbus devices support (unlimited devices)
 - Multi-device configuration through Home Assistant UI
 - Configurable timeouts and connection parameters
+- New configuration validation system
 
 ## [1.0.0] - Initial Release
 

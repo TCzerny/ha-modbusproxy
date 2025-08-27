@@ -1,7 +1,7 @@
-name: "Modbus Proxy Plus"
-version: "2.1.0"
-slug: "modbus-proxy-plus"
-description: "Mehrgeräte-Modbus-Proxy (tiagocoutinho/modbus-proxy) mit UI-Konfiguration"
+name: "Modbus Proxy Repository"
+version: "2.0.0"
+slug: "modbus-proxy"
+description: "A powerful multi-device Modbus TCP proxy"
 arch:
   - aarch64
   - amd64

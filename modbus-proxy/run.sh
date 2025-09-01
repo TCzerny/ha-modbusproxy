@@ -9,7 +9,7 @@ if [ -z "$LOG_LEVEL" ] || [ "$LOG_LEVEL" = "null" ]; then
     LOG_LEVEL="info"
 fi
 
-echo "🔧 Configuration is being generated..."
+echo "🔧 Generating configuration..."
 echo "📊 Log Level: $LOG_LEVEL"
 
 # Create base configuration
@@ -17,9 +17,13 @@ cat > "$CONFIG_PATH" <<EOF
 
 logging:
   version: 1
+  formatters:
+    standard:
+      format: "%(asctime)s %(levelname)8s %(name)s: %(message)s"
   handlers:
     console:
       class: logging.StreamHandler
+      formatter: standard
   root:
     handlers: ['console']
     level: ${LOG_LEVEL^^}
@@ -28,7 +32,7 @@ devices:
 EOF
 
 # Read device configuration from HA
-echo "📋 Read Modbus device configuration..."
+echo "📋 Reading Modbus device configuration..."
 
 # Count devices and add them
 DEVICE_COUNT=0
@@ -49,7 +53,7 @@ while true; do
     PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].port" "502")
     BIND_PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].bind_port" "")
     NAME=$(bashio::config "modbus_devices[${DEVICE_COUNT}].name" "Device $((DEVICE_COUNT+1))")
-    MODBUS_ID=$(bashio::config "modbus_devices[${DEVICE_COUNT}].modbus_id" "1")
+    # no per-device modbus_id; unit_id_remapping should be used instead
     TIMEOUT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].timeout" "10")
     CONNECTION_TIME=$(bashio::config "modbus_devices[${DEVICE_COUNT}].connection_time" "2")
     
@@ -84,10 +88,14 @@ EOF
       bind: 0:$BIND_PORT
 EOF
     
-    # Add Modbus ID if set and not 1 (default)
-    MODBUS_ID_VAL=$(bashio::config "modbus_devices[${DEVICE_COUNT}].modbus_id" "" 2>/dev/null || echo "")
-    if [ -n "$MODBUS_ID_VAL" ] && [ "$MODBUS_ID_VAL" != "null" ] && [ "$MODBUS_ID_VAL" != "1" ]; then
-        echo "    modbus_id: $MODBUS_ID_VAL" >> "$CONFIG_PATH"
+    # removed modbus_id handling; rely solely on unit_id_remapping when needed
+    
+    # Add unit_id_remapping if configured; otherwise auto-map 1 -> modbus_id when provided
+    UNIT_ID_REMAPPING=$(bashio::config "modbus_devices[${DEVICE_COUNT}].unit_id_remapping" "" 2>/dev/null || echo "")
+    if [ -n "$UNIT_ID_REMAPPING" ] && [ "$UNIT_ID_REMAPPING" != "null" ]; then
+        echo "    unit_id_remapping:" >> "$CONFIG_PATH"
+        # Parse the remapping JSON and extract key-value pairs
+        echo "$UNIT_ID_REMAPPING" | jq -r 'to_entries[] | "      " + (.key | tostring) + ": " + (.value | tostring)' >> "$CONFIG_PATH"
     fi
     
     DEVICE_COUNT=$((DEVICE_COUNT+1))
@@ -107,7 +115,6 @@ cat "$CONFIG_PATH"
 
 # Activate venv if exists
 if [ -f "/srv/venv/bin/activate" ]; then
-    echo "🔄 Activate Python venv..."
     source /srv/venv/bin/activate
 fi
 

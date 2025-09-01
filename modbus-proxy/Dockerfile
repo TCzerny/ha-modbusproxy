@@ -10,9 +10,15 @@ RUN \
 # Prepare venv
 RUN cd /srv && python3 -m venv venv
 
-# Install modbus + py3yaml via pip
+# Copy our custom modbus-proxy implementation
+COPY src/modbus_proxy.py /srv/venv/bin/modbus-proxy
+
+# Install dependencies
 RUN cd /srv && source ./venv/bin/activate && \
-    pip install modbus-proxy PyYAML
+    pip install PyYAML
+
+# Make executable
+RUN chmod +x /srv/venv/bin/modbus-proxy
 
 # Add venv to PATH
 ENV PATH="/srv/venv/bin:$PATH"

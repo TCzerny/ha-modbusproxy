@@ -2,7 +2,22 @@
 
 [![License][license-shield]](LICENSE)
 
-A powerful multi-device Modbus TCP proxy for Home Assistant that allows multiple clients to connect to Modbus servers that typically only support a single connection.
+A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced logging and client tracking. Allows multiple clients to connect to Modbus servers that typically only support a single connection.
+
+## 🆕 What's New in Version 2.1.0
+
+**Enhanced Logging & Debug Features:**
+- 🔍 **Client IP Tracking**: Every log entry shows the client's IP address and port
+- 📊 **Debug Value Parsing**: At DEBUG level, see actual Modbus register values and coil states
+- 🎯 **Detailed Request/Response Logging**: Transaction IDs, Unit IDs, Function Codes
+- ⚡ **Performance Monitoring**: Response times and connection statistics
+
+**Example Debug Output:**
+```
+2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): received request from 192.168.1.50:45231 - 12 bytes
+2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): received_from_client: TxID=1, Unit=1, FC=03
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.100:502): Registers: [12345, 67890, 11111, 22222]
+```
 
 ## About
 
@@ -13,8 +28,9 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 - 🌐 Support for multiple Modbus devices
 - ⚙️ Easy configuration through Home Assistant UI
 - 🔧 Configurable timeouts and connection parameters
-- 📊 Built-in logging and monitoring
+- 📊 Enhanced logging with client tracking and debug value parsing
 - 🚀 Host network mode for optimal performance
+- 🔍 Real-time client IP monitoring and request tracking
 
 ## Installation
 
@@ -49,36 +65,48 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `host` | **Yes** | - | IP address of the Modbus server |
 | `port` | No | `502` | Modbus TCP port of the server |
 | `bind_port` | **Yes** | - | Local port where proxy will listen |
-| `modbus_id` | No | `1` | Modbus unit/slave ID |
+
+| `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID (e.g., `1: 10`) |
 | `timeout` | No | `10.0` | Connection timeout in seconds |
 | `connection_time` | No | `2.0` | Time to establish connection in seconds |
 | `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
 
 ### Advanced Configuration Examples
 
-#### Multiple Solar Inverters
+#### Unit ID Remapping
+
+The `unit_id_remapping` feature allows you to map incoming unit IDs to different target unit IDs on the Modbus server. This is useful when:
+
+- Your Modbus client expects a specific unit ID (e.g., 1)
+- The actual Modbus server has the device on a different unit ID (e.g., 10)
+- You want to virtualize unit IDs for different clients
+
+**Example:** `unit_id_remapping: {1: 10}` means:
+- When a client sends a request to unit ID 1, it gets forwarded to unit ID 10 on the server
+- All responses from unit ID 10 appear as if they came from unit ID 1
+
+**Note:** Each device can only have one remapping configuration.
+
+#### Multiple Solar Inverters with Unit ID Remapping
 ```yaml
-- name: "Inverter 1"
-  host: "192.168.1.100"
-  port: 502
-  bind_port: 502
-  modbus_id: 1
-  timeout: 10.0
-  connection_time: 2.0
-- name: "Inverter 2"
-  host: "192.168.1.101"
-  port: 502
-  bind_port: 503
-  modbus_id: 1
-  timeout: 10.0
-  connection_time: 2.0
-- name: "Inverter 3"
-  host: "192.168.1.102"
-  port: 502
-  bind_port: 504
-  modbus_id: 1
-  timeout: 10.0
-  connection_time: 2.0
+modbus_devices:
+  - name: "Inverter 1"
+    host: "192.168.1.100"
+    port: 502
+    bind_port: 503
+    unit_id_remapping:
+      1: 10
+    timeout: 10.0
+    connection_time: 2.0
+  - name: "Inverter 2"
+    host: "192.168.1.101"
+    bind_port: 504
+    timeout: 10.0
+    connection_time: 2.0
+  - name: "Inverter 3"
+    host: "192.168.1.102"
+    bind_port: 505
+log_level: "info"
 ```
 <img width="1027" height="727" alt="image" src="https://github.com/user-attachments/assets/cdafcf9b-c521-4acb-a628-902217242466" />
 
@@ -87,14 +115,8 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 ### Step 1: Stop Existing Clients
 Before starting the proxy, stop all clients currently connected to your Modbus servers. The server needs time to release existing connections.
 
-**For SolarEdge Modbus integration:**
-1. Go to **Settings** → **Devices & Services**
-2. Find your SolarEdge integration
-3. Click **Configure**
-4. Temporarily disable or change the host
-
 ### Step 2: Configure the Add-on
-1. Go to **Settings** → **Addons** → **Modbus Proxy Plus**
+1. Go to **Settings** → **Addons** → **Modbus Proxy**
 2. Click the **Configuration** tab
 3. Add your Modbus devices using the examples above
 4. Click **Save**
@@ -135,18 +157,35 @@ Connection refused to 192.168.1.100:502
 2. Increase the `connection_time` value
 3. Check network connectivity and latency
 
-### Debugging
+### Enhanced Debugging & Monitoring
 
-Enable debug logging to get more detailed information:
+Enable debug logging to get detailed information including client tracking and value parsing:
 
 ```yaml
 log_level: "debug"
 ```
 
-Then check the add-on logs:
-1. Go to **Settings** → **Addons** → **Modbus Proxy Plus**
+**What you'll see in DEBUG mode:**
+- **Client Connections**: `Client(192.168.1.50:45231): new client connection from 192.168.1.50:45231`
+- **Request Details**: `received_from_client: TxID=1, Unit=1, FC=03` (Transaction ID, Unit ID, Function Code)
+- **Response Values**: `Registers: [12345, 67890, 11111, 22222]` or `Values: [1, 0, 1, 1, 0, 1]`
+- **Performance**: Response times and connection statistics
+
+**Check the add-on logs:**
+1. Go to **Settings** → **Addons** → **Modbus Proxy**
 2. Click the **Log** tab
-3. Look for connection attempts and error messages
+3. Look for detailed client tracking and modbus value information
+
+**Example Debug Session:**
+```
+2024-12-19 10:30:15 INFO Client(192.168.1.50:45231): new client connection from 192.168.1.50:45231
+2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): received request from 192.168.1.50:45231 - 12 bytes
+2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): received_from_client: TxID=1, Unit=1, FC=03
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.100:502): sent_to_device: TxID=1, Unit=1, FC=03
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.100:502): received: TxID=1, Unit=1, FC=03
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.100:502): Registers: [12345, 67890, 11111, 22222]
+2024-12-19 10:30:16 INFO Client(192.168.1.50:45231): Response: 15 bytes, 45.2ms
+```
 
 ### Network Configuration
 
@@ -196,13 +235,3 @@ This add-on is based on:
 See the [LICENSE](LICENSE) file for details.
 
 ---
-
-[aarch64-shield]: https://img.shields.io/badge/aarch64-yes-green.svg
-[amd64-shield]: https://img.shields.io/badge/amd64-yes-green.svg
-[armhf-shield]: https://img.shields.io/badge/armhf-yes-green.svg
-[armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg
-[commits-shield]: https://img.shields.io/github/commit-activity/y/TCzerny/ha-modbusproxy.svg
-[commits]: https://github.com/TCzerny/ha-modbusproxy/commits/main
-[license-shield]: https://img.shields.io/github/license/TCzerny/ha-modbusproxy.svg
-[releases-shield]: https://img.shields.io/github/release/TCzerny/ha-modbusproxy.svg
-[releases]: https://github.com/TCzerny/ha-modbusproxy/releases

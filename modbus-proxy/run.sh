@@ -44,16 +44,9 @@ while true; do
     fi
     
     HOST=$(bashio::config "modbus_devices[${DEVICE_COUNT}].host" "" 2>/dev/null || echo "")
-    if [ -z "$HOST" ] || [ "$HOST" = "null" ]; then
-        echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – host is missing"
-        DEVICE_COUNT=$((DEVICE_COUNT+1))
-        continue
-    fi
-    
-    PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].port" "502")
+    DEVICE=$(bashio::config "modbus_devices[${DEVICE_COUNT}].device" "" 2>/dev/null || echo "")
     BIND_PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].bind_port" "")
     NAME=$(bashio::config "modbus_devices[${DEVICE_COUNT}].name" "Device $((DEVICE_COUNT+1))")
-    # no per-device modbus_id; unit_id_remapping should be used instead
     TIMEOUT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].timeout" "10")
     CONNECTION_TIME=$(bashio::config "modbus_devices[${DEVICE_COUNT}].connection_time" "2")
     
@@ -63,13 +56,40 @@ while true; do
         continue
     fi
     
-    echo "✅ $NAME: $HOST:$PORT -> :$BIND_PORT"
-    
-    # Add device to YAML configuration
-    cat >> "$CONFIG_PATH" <<EOF
+    # Check if it's a TCP or RTU/Serial device
+    if [ -n "$HOST" ] && [ "$HOST" != "null" ]; then
+        # TCP Modbus device
+        PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].port" "502")
+        echo "✅ $NAME: TCP $HOST:$PORT -> :$BIND_PORT"
+        
+        # Add TCP device to YAML configuration
+        cat >> "$CONFIG_PATH" <<EOF
   - modbus:
       url: $HOST:$PORT
 EOF
+    elif [ -n "$DEVICE" ] && [ "$DEVICE" != "null" ]; then
+        # RTU/Serial Modbus device
+        BAUDRATE=$(bashio::config "modbus_devices[${DEVICE_COUNT}].baudrate" "9600")
+        DATABITS=$(bashio::config "modbus_devices[${DEVICE_COUNT}].databits" "8")
+        STOPBITS=$(bashio::config "modbus_devices[${DEVICE_COUNT}].stopbits" "1")
+        PARITY=$(bashio::config "modbus_devices[${DEVICE_COUNT}].parity" "N")
+        
+        echo "✅ $NAME: RTU $DEVICE ($BAUDRATE/$DATABITS/$PARITY/$STOPBITS) -> :$BIND_PORT"
+        
+        # Add RTU device to YAML configuration
+        cat >> "$CONFIG_PATH" <<EOF
+  - modbus:
+      url: rtu://$DEVICE
+      baudrate: $BAUDRATE
+      databits: $DATABITS
+      stopbits: $STOPBITS
+      parity: $PARITY
+EOF
+    else
+        echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – neither host nor device specified"
+        DEVICE_COUNT=$((DEVICE_COUNT+1))
+        continue
+    fi
     
     # Add optional parameters if set
     TIMEOUT_VAL=$(bashio::config "modbus_devices[${DEVICE_COUNT}].timeout" "" 2>/dev/null || echo "")

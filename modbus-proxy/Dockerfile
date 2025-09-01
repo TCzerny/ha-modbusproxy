@@ -1,11 +1,12 @@
 ARG BUILD_FROM
 FROM $BUILD_FROM
 
-# Install python + pip
+# Install python + pip + serial support
 WORKDIR /srv
 RUN \
   apk add --no-cache \
-    python3 py3-pip py3-yaml
+    python3 py3-pip py3-yaml \
+    pyserial
 
 # Prepare venv
 RUN cd /srv && python3 -m venv venv
@@ -15,7 +16,7 @@ COPY src/modbus_proxy.py /srv/venv/bin/modbus-proxy
 
 # Install dependencies
 RUN cd /srv && source ./venv/bin/activate && \
-    pip install PyYAML
+    pip install PyYAML pyserial
 
 # Make executable
 RUN chmod +x /srv/venv/bin/modbus-proxy

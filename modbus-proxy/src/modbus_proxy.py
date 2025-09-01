@@ -93,17 +93,61 @@ class Connection:
 
     async def _read(self):
         """Read ModBus TCP message"""
-        # TODO: Handle Modbus RTU and ASCII
-        header = await self.reader.readexactly(6)
-        size = int.from_bytes(header[4:], "big")
-        reply = header + await self.reader.readexactly(size)
-        self.log.debug("received %d bytes: %r", len(reply), reply)
+        # Handle Modbus TCP, RTU and ASCII
+        if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+            # RTU/Serial Modbus - different protocol
+            return await self._read_rtu()
+        else:
+            # TCP Modbus
+            header = await self.reader.readexactly(6)
+            size = int.from_bytes(header[4:], "big")
+            reply = header + await self.reader.readexactly(size)
+            self.log.debug("received %d bytes: %r", len(reply), reply)
+            
+            # Enhanced debug logging for modbus data
+            if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
+                self._log_modbus_message(reply, "received")
+            
+            return reply
+    
+    async def _read_rtu(self):
+        """Read ModBus RTU message"""
+        # RTU protocol: [slave_id][function_code][data][crc_low][crc_high]
+        # We need to read byte by byte to detect frame boundaries
+        import struct
         
-        # Enhanced debug logging for modbus data
-        if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
-            self._log_modbus_message(reply, "received")
+        # Read first byte (slave ID)
+        slave_id = await self.reader.readexactly(1)
         
-        return reply
+        # Read function code
+        function_code = await self.reader.readexactly(1)
+        
+        # Read data based on function code
+        data = b''
+        if function_code[0] in [0x01, 0x02, 0x03, 0x04]:  # Read functions
+            # Read address (2 bytes) + count (2 bytes)
+            data = await self.reader.readexactly(4)
+        elif function_code[0] in [0x05, 0x06]:  # Write single
+            # Read address (2 bytes) + value (2 bytes)
+            data = await self.reader.readexactly(4)
+        elif function_code[0] in [0x0F, 0x10]:  # Write multiple
+            # Read address (2 bytes) + count (2 bytes) + byte_count + data
+            addr_count = await self.reader.readexactly(4)
+            byte_count = await self.reader.readexactly(1)
+            data = addr_count + byte_count + await self.reader.readexactly(byte_count[0])
+        
+        # Read CRC (2 bytes)
+        crc = await self.reader.readexactly(2)
+        
+        # Combine into RTU frame
+        rtu_frame = slave_id + function_code + data + crc
+        self.log.debug("received RTU %d bytes: %r", len(rtu_frame), rtu_frame)
+        
+        # Enhanced debug logging for RTU data
+        if self.log.isEnabledFor(logging.DEBUG) and len(rtu_frame) >= 4:
+            self._log_rtu_message(rtu_frame, "received")
+        
+        return rtu_frame
 
     async def read(self):
         try:
@@ -160,6 +204,46 @@ class Connection:
         except Exception as e:
             self.log.debug(f"Failed to parse modbus message: {e}")
 
+    def _log_rtu_message(self, data, direction):
+        """Enhanced logging for RTU modbus messages with parsed details"""
+        if len(data) < 4:
+            return
+            
+        try:
+            # Parse RTU frame: [slave_id][function_code][data][crc_low][crc_high]
+            slave_id = data[0]
+            function_code = data[1]
+            rtu_data = data[2:-2]  # Exclude CRC
+            crc = data[-2:]
+            
+            # Log basic info
+            self.log.debug(f"{direction} RTU: Slave={slave_id}, FC={function_code:02X}")
+            
+            # Parse function-specific data for read responses
+            if direction == "received" and function_code in [0x01, 0x02, 0x03, 0x04] and len(rtu_data) > 1:
+                byte_count = rtu_data[0]
+                if len(rtu_data) >= 1 + byte_count:
+                    values_data = rtu_data[1:1+byte_count]
+                    
+                    if function_code in [0x01, 0x02]:  # Coils/Discrete Inputs
+                        values = []
+                        for i, byte_val in enumerate(values_data):
+                            for bit in range(8):
+                                if i * 8 + bit < byte_count * 8:
+                                    values.append((byte_val >> bit) & 1)
+                        self.log.debug(f"RTU Values: {values[:16]}{'...' if len(values) > 16 else ''}")
+                        
+                    elif function_code in [0x03, 0x04]:  # Holding/Input Registers
+                        values = []
+                        for i in range(0, len(values_data), 2):
+                            if i + 1 < len(values_data):
+                                value = struct.unpack('>H', values_data[i:i+2])[0]
+                                values.append(value)
+                        self.log.debug(f"RTU Registers: {values[:8]}{'...' if len(values) > 8 else ''}")
+                        
+        except Exception as e:
+            self.log.debug(f"Failed to parse RTU message: {e}")
+
 
 class Client(Connection):
     def __init__(self, reader, writer):
@@ -196,11 +280,25 @@ class ModBus(Connection):
         modbus = config["modbus"]
         url = parse_url(modbus["url"])
         bind = parse_url(config["listen"]["bind"])
-        super().__init__(f"ModBus({url.hostname}:{url.port})", None, None)
+        
+        # Determine if it's RTU or TCP based on URL scheme
+        if url.scheme == "rtu":
+            self.modbus_type = "rtu"
+            device_name = url.path.lstrip('/')  # Remove leading slash
+            super().__init__(f"ModBus(RTU:{device_name})", None, None)
+            self.device = device_name
+            self.baudrate = modbus.get("baudrate", 9600)
+            self.databits = modbus.get("databits", 8)
+            self.stopbits = modbus.get("stopbits", 1)
+            self.parity = modbus.get("parity", "N")
+        else:
+            self.modbus_type = "tcp"
+            super().__init__(f"ModBus({url.hostname}:{url.port})", None, None)
+            self.modbus_host = url.hostname
+            self.modbus_port = url.port
+        
         self.host = bind.hostname
         self.port = 502 if bind.port is None else bind.port
-        self.modbus_host = url.hostname
-        self.modbus_port = url.port
         self.timeout = modbus.get("timeout", None)
         self.connection_time = modbus.get("connection_time", 0)
         self.unit_id_remapping = config.get("unit_id_remapping") or {}
@@ -213,11 +311,27 @@ class ModBus(Connection):
             return self.server.sockets[0].getsockname()
 
     async def open(self):
-        self.log.info("connecting to modbus...")
-        self.reader, self.writer = await asyncio.open_connection(
-            self.modbus_host, self.modbus_port
-        )
-        self.log.info("connected!")
+        if self.modbus_type == "rtu":
+            self.log.info(f"connecting to RTU device {self.device}...")
+            # For RTU, we'll use a different approach - serial connection
+            # This is a simplified implementation - in production you'd want
+            # a proper async serial library like pyserial-asyncio
+            import serial
+            self.serial = serial.Serial(
+                port=self.device,
+                baudrate=self.baudrate,
+                bytesize=self.databits,
+                parity=self.parity,
+                stopbits=self.stopbits,
+                timeout=self.timeout
+            )
+            self.log.info(f"connected to RTU device {self.device}!")
+        else:
+            self.log.info("connecting to modbus...")
+            self.reader, self.writer = await asyncio.open_connection(
+                self.modbus_host, self.modbus_port
+            )
+            self.log.info("connected!")
 
     async def connect(self):
         if not self.opened:

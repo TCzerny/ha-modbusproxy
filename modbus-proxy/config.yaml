@@ -24,13 +24,33 @@ options:
       bind_port: 504
       timeout: 10.0
       connection_time: 2.0
+    - name: "RTU Device 1"
+      device: "/dev/ttyUSB0"
+      baudrate: 9600
+      bind_port: 505
+      timeout: 5.0
+      connection_time: 1.0
+    - name: "Serial Device 1"
+      device: "/dev/ttyACM0"
+      baudrate: 115200
+      bind_port: 506
+      timeout: 3.0
+      connection_time: 0.5
   log_level: "info"
 schema:
   log_level: "list(info|warning|error|debug)?"
   modbus_devices:
     - name: "str?"
-      host: "str"
+      # TCP Modbus parameters
+      host: "str?"
       port: "port?"
+      # RTU/Serial Modbus parameters  
+      device: "str?"
+      baudrate: "int?"
+      databits: "int?"
+      stopbits: "int?"
+      parity: "str?"
+      # Common parameters
       bind_port: "port"
       unit_id_remapping: "str?"
       timeout: "float?"

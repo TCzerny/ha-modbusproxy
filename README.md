@@ -303,12 +303,6 @@ This add-on is based on:
 - **Original add-on:** [Akulatraxas/ha-modbusproxy](https://github.com/Akulatraxas/ha-modbusproxy)
 - **Modbus Proxy Library:** [tiagocoutinho/modbus-proxy](https://github.com/tiagocoutinho/modbus-proxy)
 
-**Enhanced Features in Version 2.2.0:**
-- RTU/Serial Modbus support with configurable serial parameters
-- Custom modbus-proxy implementation with client IP tracking
-- Debug-level value parsing for registers and coils (TCP & RTU)
-- Enhanced request/response logging with transaction details
-- Performance monitoring and connection statistics
 
 ## License
 

@@ -1,5 +1,5 @@
 name: "Modbus Proxy"
-version: "2.1.0"
+version: "2.2.0"
 slug: "modbus_proxy"
 description: "A powerful multi-device Modbus TCP proxy"
 arch:

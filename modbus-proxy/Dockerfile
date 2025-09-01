@@ -5,8 +5,7 @@ FROM $BUILD_FROM
 WORKDIR /srv
 RUN \
   apk add --no-cache \
-    python3 py3-pip py3-yaml \
-    pyserial
+    python3 py3-pip py3-yaml
 
 # Prepare venv
 RUN cd /srv && python3 -m venv venv

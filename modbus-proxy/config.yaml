@@ -11,7 +11,8 @@ url: "https://github.com/TCzerny/ha-modbusproxy"
 startup: services
 init: false
 host_network: true
-privileged: true
+privileged:
+  - SYS_RAWIO
 devices:
   - "/dev/ttyUSB0"
   - "/dev/ttyUSB1"

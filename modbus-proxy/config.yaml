@@ -11,7 +11,7 @@ url: "https://github.com/TCzerny/ha-modbusproxy"
 startup: services
 init: false
 host_network: true
-# privileged: true  # Temporarily disabled due to schema validation issue
+privileged: true
 devices:
   - "/dev/ttyUSB0"
   - "/dev/ttyUSB1"
@@ -51,7 +51,7 @@ schema:
   log_level: "list(info|warning|error|debug|trace)?"
   auto_detect_device: "bool?"
   modbus_devices:
-    - name: "str?"
+    - name: "str"
       protocol: "list(tcp|rtu)"
       # TCP Modbus parameters
       host: "str?"

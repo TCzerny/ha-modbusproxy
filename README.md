@@ -103,8 +103,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `port` | No | `502` | Modbus TCP port of the server |
 | `bind_port` | **Yes** | - | Local port where proxy will listen |
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID (e.g., `1: 10`) |
-| `timeout` | No | `10.0` | Connection timeout in seconds |
-| `connection_time` | No | `2.0` | Time to establish connection in seconds |
+| `connection_time` | No | `0.1` | Time to establish connection in seconds |
 | `log_level` | No | `trace` | Logging level: `trace`, `debug`, `info`, `warning`, `error` |
 
 #### RTU/Serial Modbus Parameters
@@ -120,7 +119,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `bind_port` | **Yes** | - | Local port where proxy will listen |
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID |
 | `timeout` | No | `5.0` | Connection timeout in seconds |
-| `connection_time` | No | `1.0` | Time to establish connection in seconds |
+| `connection_time` | No | `0.1` | Time to establish connection in seconds |
 | `log_level` | No | `trace` | Logging level: `trace`, `debug`, `info`, `warning`, `error` |
 
 *`device` is optional when `auto_detect_device: true` is enabled
@@ -142,7 +141,7 @@ modbus_devices:
     parity: "N"
     bind_port: 502
     timeout: 5.0
-    connection_time: 1.0
+    connection_time: 0.1
 ```
 
 **Auto-Detection Priority:**
@@ -272,6 +271,39 @@ Connection refused to 192.168.1.100:502
 1. Increase the `timeout` value in configuration
 2. Increase the `connection_time` value
 3. Check network connectivity and latency
+
+#### Master-Slave Inverter Connection Issues
+**Problem:** Second inverter (slave) connection fails in Master-Slave setups (e.g., Sungrow hybrid inverters)
+
+**Related Issue:** [#4 - Connection to second inverter fails](https://github.com/TCzerny/ha-modbusproxy/issues/4)
+
+**Symptoms:**
+- First inverter connects successfully
+- Second inverter shows connection errors
+- Timeout or connection refused errors
+
+**Solutions:**
+1. **Reduce `connection_time`** - Set to `0.1` or `0.0` for faster connection establishment
+2. **Increase `timeout`** - Set to `15.0` or higher for slower responding devices
+3. **Check inverter settings** - Ensure both inverters are properly configured for Master-Slave mode
+4. **Network delays** - Some inverters need time between connection attempts
+
+**Recommended Configuration for Master-Slave:**
+```yaml
+modbus_devices:
+  - name: "Master Inverter"
+    host: "192.168.1.100"
+    port: 502
+    bind_port: 502
+    timeout: 15.0
+    connection_time: 0.1  # Reduced for faster connection
+  - name: "Slave Inverter"
+    host: "192.168.1.101"
+    port: 502
+    bind_port: 503
+    timeout: 15.0
+    connection_time: 0.1  # Reduced for faster connection
+```
 
 ### Enhanced Logging & Monitoring
 

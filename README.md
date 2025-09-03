@@ -4,6 +4,21 @@
 
 A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced logging and client tracking. Allows multiple clients to connect to Modbus servers that typically only support a single connection.
 
+## ⚠️ BETA VERSION WARNING
+
+**This is a BETA version (2.2.0-beta) with experimental RTU/Serial support.**
+
+**⚠️ Important Notes:**
+- **Experimental Features**: RTU/Serial support is still being tested
+- **Backup Recommended**: Backup your current configuration before testing
+- **Fallback Available**: You can always switch back to stable version 2.1.0
+- **Testing Phase**: This version is for testing RTU devices only
+
+**To switch back to stable version:**
+1. Remove this repository from Home Assistant
+2. Add the stable repository: `https://github.com/TCzerny/ha-modbusproxy-stable`
+3. Install version 2.1.0
+
 ## 🆕 What's New in Version 2.2.0
 
 **RTU/Serial Modbus Support:**

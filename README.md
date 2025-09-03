@@ -14,10 +14,18 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 - **Fallback Available**: You can always switch back to stable version 2.1.0
 - **Testing Phase**: This version is for testing RTU devices only
 
+**To install Beta version:**
+1. Go to [GitHub Releases](https://github.com/TCzerny/ha-modbusproxy/releases)
+2. Download the `v2.2.0-beta` release
+3. Install as local add-on in Home Assistant
+
 **To switch back to stable version:**
-1. Remove this repository from Home Assistant
-2. Add the stable repository: `https://github.com/TCzerny/ha-modbusproxy-stable`
-3. Install version 2.1.0
+1. Remove the beta add-on
+2. Add the repository: `https://github.com/TCzerny/ha-modbusproxy`
+3. Install the stable version
+
+**Note:** The Supervisor automatically installs the latest stable version.
+Beta versions must be installed manually from GitHub Releases.
 
 ## 🆕 What's New in Version 2.2.0
 

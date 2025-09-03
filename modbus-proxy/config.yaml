@@ -19,7 +19,7 @@ devices:
   - "/dev/ttyACM0"
   - "/dev/serial/by-id/"
 options:
-  log_level: "trace"
+  log_level: "info"
   auto_detect_device: true
   modbus_devices:
     - name: "Solar Inverter 1"
@@ -49,7 +49,7 @@ options:
       timeout: 3.0
       connection_time: 0.1
 schema:
-  log_level: "list(info|warning|error|debug|trace)?"
+  log_level: "list(info|warning|error|debug)?"
   auto_detect_device: "bool?"
   modbus_devices:
     - name: "str"

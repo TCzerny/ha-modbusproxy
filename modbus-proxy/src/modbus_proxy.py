@@ -29,16 +29,6 @@ __version__ = "0.8.1"
 # 0.8.0 - Original version from tiagocoutinho/modbus-proxy
 
 
-# Custom TRACE level for detailed proxy activity
-TRACE = 5
-logging.addLevelName(TRACE, "TRACE")
-
-def trace(self, message, *args, **kwargs):
-    if self.isEnabledFor(TRACE):
-        self._log(TRACE, message, args, **kwargs)
-
-logging.Logger.trace = trace
-
 DEFAULT_LOG_CONFIG = {
     "version": 1,
     "formatters": {
@@ -142,17 +132,17 @@ class Connection:
             # RTU/Serial write
             if hasattr(self, 'serial_writer'):
                 # Async serial
-                self.log.trace(f"[RTU:{self.device}] → Request: %d bytes", len(data))
+                self.log.debug(f"[RTU:{self.device}] → Request: %d bytes", len(data))
                 self.serial_writer.write(data)
                 await self.serial_writer.drain()
             elif hasattr(self, 'serial'):
                 # Sync serial fallback
-                self.log.trace(f"[RTU:{self.device}] → Request: %d bytes", len(data))
+                self.log.debug(f"[RTU:{self.device}] → Request: %d bytes", len(data))
                 self.serial.write(data)
                 self.serial.flush()
         else:
             # TCP write
-            self.log.trace(f"[TCP:{self.modbus_host}:{self.modbus_port}] → Request: %d bytes", len(data))
+            self.log.debug(f"[TCP:{self.modbus_host}:{self.modbus_port}] → Request: %d bytes", len(data))
             self.writer.write(data)
             await self.writer.drain()
 
@@ -178,9 +168,9 @@ class Connection:
             reply = header + await self.reader.readexactly(size)
             
             if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
-                self.log.trace(f"[RTU:{self.device}] ← Response: %d bytes", len(reply))
+                self.log.debug(f"[RTU:{self.device}] ← Response: %d bytes", len(reply))
             else:
-                self.log.trace(f"[TCP:{self.modbus_host}:{self.modbus_port}] ← Response: %d bytes", len(reply))
+                self.log.debug(f"[TCP:{self.modbus_host}:{self.modbus_port}] ← Response: %d bytes", len(reply))
             
             # Enhanced debug logging for modbus data
             if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
@@ -222,7 +212,7 @@ class Connection:
         
         # Combine into RTU frame
         rtu_frame = slave_id + function_code + data + crc
-        self.log.trace(f"[RTU:{self.device}] ← Response: %d bytes", len(rtu_frame))
+        self.log.debug(f"[RTU:{self.device}] ← Response: %d bytes", len(rtu_frame))
         
         # Enhanced debug logging for RTU data
         if self.log.isEnabledFor(logging.DEBUG) and len(rtu_frame) >= 4:
@@ -333,11 +323,11 @@ class Client(Connection):
         self.client_ip = peer[0]
         self.client_port = peer[1]
         self.request_count = 0
-        self.log.info(f"new client connection from {self.client_ip}:{self.client_port}")
+        self.log.info(f"new client connection from {self.client_ip}:{self.client_port} -> to Proxy")
         
     async def _write(self, data):
         # Enhanced logging for client writes (responses)
-        self.log.trace(f"[{self.client_ip}:{self.client_port}] → Response: %d bytes", len(data))
+        self.log.debug(f"[{self.client_ip}:{self.client_port}] → Response: %d bytes", len(data))
         if self.log.isEnabledFor(logging.DEBUG) and len(data) >= 7:
             self._log_modbus_message(data, "sent_to_client")
         self.writer.write(data)
@@ -350,7 +340,7 @@ class Client(Connection):
         reply = header + await self.reader.readexactly(size)
         
         self.request_count += 1
-        self.log.trace(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
+        self.log.debug(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
         
         # Enhanced debug logging for client requests
         if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
@@ -402,24 +392,21 @@ class ModBus(Connection):
             if not os.path.exists(self.device):
                 raise FileNotFoundError(f"Serial device {self.device} not found")
             
-            # Check device permissions
+            # Check device existence and type
+            if not os.path.exists(self.device):
+                raise FileNotFoundError(f"Serial device {self.device} not found")
+            
             try:
                 device_stat = os.stat(self.device)
                 if not stat.S_ISCHR(device_stat.st_mode):
                     raise ValueError(f"{self.device} is not a character device")
                 
-                # Check if we have read/write permissions
+                # Check if we have read/write permissions (set by Supervisor)
                 if not os.access(self.device, os.R_OK | os.W_OK):
-                    self.log.warning(f"Insufficient permissions for {self.device}. Attempting to fix...")
-                    # Try to fix permissions (requires privileged mode)
-                    try:
-                        os.chmod(self.device, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
-                        self.log.info(f"Fixed permissions for {self.device}")
-                    except PermissionError:
-                        self.log.error(f"Cannot fix permissions for {self.device}. Run container with privileged mode.")
-                        raise
+                    self.log.error(f"Insufficient permissions for {self.device}. Check Supervisor device mapping.")
+                    raise PermissionError(f"Cannot access {self.device} - check config.yaml devices list")
             except Exception as e:
-                self.log.error(f"Device permission check failed: {e}")
+                self.log.error(f"Device check failed: {e}")
                 raise
             
             # Use asyncio serial connection
@@ -448,11 +435,11 @@ class ModBus(Connection):
                 )
                 self.log.info(f"connected to RTU device {self.device} (sync mode)!")
         else:
-            self.log.info("connecting to modbus...")
+            self.log.info(f"connecting Proxy to Modbus Device({self.modbus_host}:{self.modbus_port})...")
             self.reader, self.writer = await asyncio.open_connection(
                 self.modbus_host, self.modbus_port
             )
-            self.log.info("connected!")
+            self.log.info(f"connected to Device({self.modbus_host}:{self.modbus_port})!")
 
     async def connect(self):
         if not self.opened:
@@ -506,9 +493,9 @@ class ModBus(Connection):
                 
                 # Log proxy activity overview
                 if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
-                    self.log.trace(f"PROXY: {client.client_ip}:{client.client_port} → RTU:{self.device} (Request #{client.request_count})")
+                    self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → RTU:{self.device} (Request #{client.request_count})")
                 else:
-                    self.log.trace(f"PROXY: {client.client_ip}:{client.client_port} → TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count})")
+                    self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count})")
                 
                 reply = await self.write_read(self._transform_request(request))
                 if not reply:
@@ -532,7 +519,8 @@ class ModBus(Connection):
         if self.server is None:
             await self.start()
         async with self.server:
-            self.log.info("Ready to accept requests on %s:%d", self.host, self.port)
+            device_info = f"Device({self.modbus_host}:{self.modbus_port})" if self.modbus_type == "tcp" else f"Device({self.device})"
+            self.log.info(f"Ready to accept requests on {self.host}:{self.port} for {device_info}")
             await self.server.serve_forever()
 
 
@@ -563,6 +551,9 @@ def prepare_log(config):
         cfg.setdefault("version", 1)
         cfg.setdefault("disable_existing_loggers", False)
         logging.config.dictConfig(cfg)
+        
+        # Note: Using standard Python logging levels (DEBUG, INFO, WARNING, ERROR)
+    
     warnings.simplefilter("always", DeprecationWarning)
     logging.captureWarnings(True)
     return log

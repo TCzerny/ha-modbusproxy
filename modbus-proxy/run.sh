@@ -4,6 +4,7 @@ set -e
 CONFIG_PATH="/srv/modbus.config.yaml"
 LOG_LEVEL=$(bashio::config 'log_level' 'info')
 AUTO_DETECT_DEVICE=$(bashio::config 'auto_detect_device' 'false')
+HAS_RTU_DEVICES="false"
 
 # Auto-detect serial device function
 autodetect_serial_device() {
@@ -59,6 +60,25 @@ fi
 echo "🔧 Generating configuration..."
 echo "📊 Log Level: $LOG_LEVEL"
 
+# Map log levels to Python logging levels
+case "$LOG_LEVEL" in
+    "debug")
+        PYTHON_LOG_LEVEL="DEBUG"
+        ;;
+    "info")
+        PYTHON_LOG_LEVEL="INFO"
+        ;;
+    "warning")
+        PYTHON_LOG_LEVEL="WARNING"
+        ;;
+    "error")
+        PYTHON_LOG_LEVEL="ERROR"
+        ;;
+    *)
+        PYTHON_LOG_LEVEL="INFO"
+        ;;
+esac
+
 # Create base configuration
 cat > "$CONFIG_PATH" <<EOF
 
@@ -73,7 +93,7 @@ logging:
       formatter: standard
   root:
     handlers: ['console']
-    level: ${LOG_LEVEL^^}
+    level: $PYTHON_LOG_LEVEL
 
 devices:
 EOF
@@ -130,6 +150,7 @@ while true; do
 EOF
     elif [ "$DEVICE_TYPE" = "rtu" ]; then
         # RTU/Serial Modbus device
+        HAS_RTU_DEVICES="true"
         BAUDRATE=$(bashio::config "modbus_devices[${DEVICE_COUNT}].baudrate" "9600")
         DATABITS=$(bashio::config "modbus_devices[${DEVICE_COUNT}].databits" "8")
         STOPBITS=$(bashio::config "modbus_devices[${DEVICE_COUNT}].stopbits" "1")
@@ -138,9 +159,10 @@ EOF
         # Auto-detect device if not specified and auto-detect is enabled
         if [ -z "$DEVICE" ] || [ "$DEVICE" = "null" ]; then
             if [ "$AUTO_DETECT_DEVICE" = "true" ]; then
+                echo "🔍 Attempting auto-detection for $NAME..."
                 if autodetect_serial_device; then
                     DEVICE="$DETECTED_DEVICE"
-                    echo "🔍 Auto-detected device for $NAME: $DEVICE"
+                    echo "✅ Auto-detected device for $NAME: $DEVICE"
                 else
                     echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – no device specified and auto-detect failed"
                     DEVICE_COUNT=$((DEVICE_COUNT+1))
@@ -182,14 +204,7 @@ EOF
         echo "      connection_time: $CONNECTION_TIME_VAL" >> "$CONFIG_PATH"
     fi
     
-    cat >> "$CONFIG_PATH" <<EOF
-    listen:
-      bind: 0:$BIND_PORT
-EOF
-    
-    # removed modbus_id handling; rely solely on unit_id_remapping when needed
-    
-    # Add unit_id_remapping if configured; otherwise auto-map 1 -> modbus_id when provided
+    # Add unit_id_remapping if configured
     UNIT_ID_REMAPPING=$(bashio::config "modbus_devices[${DEVICE_COUNT}].unit_id_remapping" "" 2>/dev/null || echo "")
     if [ -n "$UNIT_ID_REMAPPING" ] && [ "$UNIT_ID_REMAPPING" != "null" ]; then
         echo "    unit_id_remapping:" >> "$CONFIG_PATH"
@@ -197,8 +212,14 @@ EOF
         echo "$UNIT_ID_REMAPPING" | jq -r 'to_entries[] | "      " + (.key | tostring) + ": " + (.value | tostring)' >> "$CONFIG_PATH"
     fi
     
-    DEVICE_COUNT=$((DEVICE_COUNT+1))
+    # Add listen configuration
+    cat >> "$CONFIG_PATH" <<EOF
+    listen:
+      bind: 0:$BIND_PORT
+EOF
+    
     VALID_DEVICES=$((VALID_DEVICES+1))
+    DEVICE_COUNT=$((DEVICE_COUNT+1))
 done
 
 if [ "$VALID_DEVICES" -eq 0 ]; then
@@ -212,16 +233,8 @@ echo "✅ $VALID_DEVICES valid devices configured"
 echo "📄 Generated Config:"
 cat "$CONFIG_PATH"
 
-# Setup udev rules for serial devices
-echo "🔧 Setting up udev rules for serial devices..."
-if [ -d "/etc/udev/rules.d" ]; then
-    # Reload udev rules
-    udevadm control --reload-rules
-    udevadm trigger
-    echo "✅ Udev rules reloaded"
-fi
-
 # Activate venv if exists
+echo "🔧 Activate Venv..."
 if [ -f "/srv/venv/bin/activate" ]; then
     source /srv/venv/bin/activate
 fi

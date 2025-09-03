@@ -11,7 +11,7 @@ url: "https://github.com/TCzerny/ha-modbusproxy"
 startup: services
 init: false
 host_network: true
-privileged: true
+# privileged: true  # Temporarily disabled due to schema validation issue
 devices:
   - "/dev/ttyUSB0"
   - "/dev/ttyUSB1"
@@ -27,7 +27,6 @@ options:
       port: 502
       bind_port: 502
       timeout: 10.0
-      connection_time: 0.1
       connection_time: 0.1
     - name: "RTU Device 1"
       protocol: "rtu"

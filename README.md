@@ -34,11 +34,13 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 
 ## Installation
 
-### Method 1: One-Click Installation (Recommended)
+### Stable Version (Recommended)
+
+**For most users, install the stable version:**
 
 [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FTCzerny%2Fha-modbusproxy)
 
-### Method 2: Manual Installation
+### Manual Installation
 
 1. Navigate to **Settings** → **Addons** → **Add-on Store** in your Home Assistant
 2. Click the **⋮** menu in the top right corner
@@ -46,6 +48,16 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 4. Add this repository URL: `https://github.com/TCzerny/ha-modbusproxy`
 5. Find **Modbus Proxy** in the add-on store
 6. Click **Install**
+
+### Beta Version (RTU/Serial Support)
+
+**For testing RTU/Serial features:**
+
+1. Go to [GitHub Releases](https://github.com/TCzerny/ha-modbusproxy/releases)
+2. Download the `v2.2.0-beta` release
+3. Install as local add-on in Home Assistant
+
+**Note:** Beta versions are for testing only. Use the stable version for production.
 
 ## Configuration
 
@@ -97,7 +109,7 @@ modbus_devices:
     unit_id_remapping:
       1: 10
     timeout: 10.0
-    connection_time: 2.0
+    connection_time: 0.1
   - name: "Inverter 2"
     host: "192.168.1.101"
     bind_port: 504

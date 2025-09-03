@@ -33,7 +33,7 @@ Beta versions must be installed manually from GitHub Releases.
 - 🔌 **RTU Protocol Support**: Connect to Modbus RTU devices via serial ports
 - 📡 **Serial Communication**: Support for USB-to-Serial adapters and RS485 devices
 - ⚙️ **Configurable Serial Parameters**: Baudrate, databits, stopbits, parity
-- 🔍 **RTU Debug Logging**: Enhanced logging for RTU protocol messages
+- 🔍 **Enhanced INFO Messages**: Clear Client ↔ Proxy ↔ Device tracking
 - 🔍 **Auto-Detection**: Automatically detect serial devices for plug & play setup
 
 **Enhanced Logging & Debug Features:**
@@ -41,7 +41,7 @@ Beta versions must be installed manually from GitHub Releases.
 - 📊 **Debug Value Parsing**: At DEBUG level, see actual Modbus register values and coil states
 - 🎯 **Detailed Request/Response Logging**: Transaction IDs, Unit IDs, Function Codes
 - ⚡ **Performance Monitoring**: Response times and connection statistics
-- 🔍 **TRACE Level**: New logging level for proxy activity overview and IP tracking
+- 🔍 **Enhanced INFO Messages**: Clear Client ↔ Proxy ↔ Device tracking
 - 📈 **Request Counting**: Track number of requests per client connection
 
 **Example Debug Output (TCP):**
@@ -112,7 +112,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `bind_port` | **Yes** | - | Local port where proxy will listen |
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID (e.g., `1: 10`) |
 | `connection_time` | No | `0.1` | Time to establish connection in seconds |
-| `log_level` | No | `trace` | Logging level: `trace`, `debug`, `info`, `warning`, `error` |
+| `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
 
 #### RTU/Serial Modbus Parameters
 | Parameter | Required | Default | Description |
@@ -128,7 +128,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID |
 | `timeout` | No | `5.0` | Connection timeout in seconds |
 | `connection_time` | No | `0.1` | Time to establish connection in seconds |
-| `log_level` | No | `trace` | Logging level: `trace`, `debug`, `info`, `warning`, `error` |
+| `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
 
 *`device` is optional when `auto_detect_device: true` is enabled
 
@@ -321,38 +321,33 @@ The add-on provides multiple logging levels for different monitoring needs:
 
 | Level | Description | Use Case |
 |-------|-------------|----------|
-| **`trace`** | Proxy activity overview | Monitor which IPs connect and what they request |
 | **`debug`** | Detailed Modbus parsing | See actual register values and function codes |
 | **`info`** | Connection status | Basic connection and error information |
 | **`warning`** | Warnings only | Important issues that don't break functionality |
 | **`error`** | Errors only | Critical problems only |
 
-#### TRACE Level - Proxy Activity Overview
+#### INFO Level - Connection Status
 
-Perfect for monitoring which devices connect to your proxy and what they're doing:
+Perfect for monitoring which devices connect to your proxy and their status:
 
 ```yaml
-log_level: "trace"
+log_level: "info"
 ```
 
-**Example TRACE Output:**
+**Example INFO Output:**
 ```
-2024-12-19 10:30:15 INFO  [Client(192.168.1.50:45231)] new client connection from 192.168.1.50:45231
-2024-12-19 10:30:16 TRACE [Client(192.168.1.50:45231)] ← Request #1: 12 bytes
-2024-12-19 10:30:16 TRACE PROXY: 192.168.1.50:45231 → TCP:192.168.1.100:502 (Request #1)
-2024-12-19 10:30:16 TRACE [TCP:192.168.1.100:502] → Request: 12 bytes
-2024-12-19 10:30:16 TRACE [TCP:192.168.1.100:502] ← Response: 15 bytes
-2024-12-19 10:30:16 TRACE [Client(192.168.1.50:45231)] → Response: 15 bytes
+2024-12-19 10:30:15 INFO modbus-proxy.ModBus - Ready to accept requests on 0:502 for Device(192.168.1.100:502)
+2024-12-19 10:30:16 INFO modbus-proxy.Client - new client connection from 192.168.1.50:45231 -> to Proxy
+2024-12-19 10:30:16 INFO modbus-proxy.ModBus - connecting Proxy to Modbus Device(192.168.1.100:502)...
+2024-12-19 10:30:16 INFO modbus-proxy.ModBus - connected to Device(192.168.1.100:502)!
 ```
 
-**Example TRACE Output (RTU):**
+**Example INFO Output (RTU):**
 ```
-2024-12-19 10:30:15 INFO  [Client(192.168.1.51:45232)] new client connection from 192.168.1.51:45232
-2024-12-19 10:30:16 TRACE [Client(192.168.1.51:45232)] ← Request #1: 8 bytes
-2024-12-19 10:30:16 TRACE PROXY: 192.168.1.51:45232 → RTU:/dev/ttyUSB0 (Request #1)
-2024-12-19 10:30:16 TRACE [RTU:/dev/ttyUSB0] → Request: 8 bytes
-2024-12-19 10:30:16 TRACE [RTU:/dev/ttyUSB0] ← Response: 11 bytes
-2024-12-19 10:30:16 TRACE [Client(192.168.1.51:45232)] → Response: 11 bytes
+2024-12-19 10:30:15 INFO modbus-proxy.ModBus - Ready to accept requests on 0:503 for Device(/dev/ttyUSB0)
+2024-12-19 10:30:16 INFO modbus-proxy.Client - new client connection from 192.168.1.51:45232 -> to Proxy
+2024-12-19 10:30:16 INFO modbus-proxy.ModBus - connecting to RTU device /dev/ttyUSB0...
+2024-12-19 10:30:16 INFO modbus-proxy.ModBus - connected to RTU device /dev/ttyUSB0!
 ```
 
 #### DEBUG Level - Detailed Modbus Parsing

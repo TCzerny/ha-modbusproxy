@@ -5,7 +5,7 @@
 ### Added
 - **RTU/Serial Modbus Support** - Full support for Modbus RTU over serial connections
 - **Auto-Detection** - Plug & play serial device detection with priority-based device selection
-- **TRACE Logging Level** - New logging level for proxy activity overview and IP tracking
+- **Enhanced INFO Messages** - Clear Client ↔ Proxy ↔ Device tracking with improved connection status
 - **Request Counting** - Track number of requests per client connection
 - **Protocol Field** - Explicit protocol specification (`tcp` or `rtu`)
 - **Asyncio Serial Support** - Non-blocking serial communication using `pyserial-asyncio`
@@ -16,7 +16,7 @@
 ### Enhanced
 - **Serial Communication** - Improved RTU/Serial support with fallback mechanisms
 - **Error Handling** - Comprehensive device validation and graceful degradation
-- **Logging System** - Enhanced logging with detailed proxy activity monitoring
+- **Logging System** - Simplified logging with standard Python levels and improved INFO messages
 - **Device Management** - Better serial device detection and configuration
 - **Connection Management** - Improved connection recovery and stability
 
@@ -28,7 +28,8 @@
 - **Permission Validation** - Comprehensive device existence and permission checks
 
 ### Core Proxy Updates (modbus_proxy.py v0.8.1)
-- **Custom TRACE Level** - New logging level (5) for proxy activity overview
+- **Simplified Logging** - Standard Python logging levels (DEBUG, INFO, WARNING, ERROR)
+- **Enhanced INFO Messages** - Clear Client ↔ Proxy ↔ Device tracking with improved connection status
 - **Asyncio Serial Support** - Non-blocking serial I/O with fallback to synchronous
 - **Enhanced IP Tracking** - Client IP and port tracking in all log messages
 - **Request Counting** - Per-client request counter for activity monitoring
@@ -40,7 +41,7 @@
 - Added `auto_detect_device` option (default: `true`)
 - Added `protocol` field for explicit protocol specification
 - Extended RTU parameters: `device`, `baudrate`, `databits`, `stopbits`, `parity`
-- Updated logging levels: `trace`, `debug`, `info`, `warning`, `error`
+- Updated logging levels: `debug`, `info`, `warning`, `error`
 
 ### Breaking Changes
 - **None** - This version is fully backward compatible with 2.1.0

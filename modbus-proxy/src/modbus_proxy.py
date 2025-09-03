@@ -13,18 +13,40 @@ import argparse
 import warnings
 import contextlib
 import logging.config
+import os
+import stat
 from urllib.parse import urlparse
 
-__version__ = "0.8.0"
+__version__ = "0.8.1"
 
+# Changelog:
+# 0.8.1 - Enhanced logging system with TRACE level, improved RTU support with asyncio serial
+#         - Added custom TRACE logging level for proxy activity overview
+#         - Improved RTU/Serial support with pyserial-asyncio
+#         - Enhanced IP tracking and request counting
+#         - Better device permission handling and udev integration
+#         - Improved error handling and connection management
+# 0.8.0 - Original version from tiagocoutinho/modbus-proxy
+
+
+# Custom TRACE level for detailed proxy activity
+TRACE = 5
+logging.addLevelName(TRACE, "TRACE")
+
+def trace(self, message, *args, **kwargs):
+    if self.isEnabledFor(TRACE):
+        self._log(TRACE, message, args, **kwargs)
+
+logging.Logger.trace = trace
 
 DEFAULT_LOG_CONFIG = {
     "version": 1,
     "formatters": {
-        "standard": {"format": "%(asctime)s %(levelname)8s %(name)s: %(message)s"}
+        "standard": {"format": "%(asctime)s %(levelname)8s %(name)s: %(message)s"},
+        "detailed": {"format": "%(asctime)s %(levelname)8s [%(name)s] %(message)s"}
     },
     "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "standard"}
+        "console": {"class": "logging.StreamHandler", "formatter": "detailed"}
     },
     "root": {"handlers": ["console"], "level": "INFO"},
 }
@@ -57,14 +79,52 @@ class Connection:
 
     @property
     def opened(self):
-        return (
-            self.writer is not None
-            and not self.writer.is_closing()
-            and not self.reader.at_eof()
-        )
+        if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+            # Check RTU/Serial connection
+            if hasattr(self, 'serial_writer'):
+                return (
+                    self.serial_writer is not None
+                    and not self.serial_writer.is_closing()
+                    and not self.serial_reader.at_eof()
+                )
+            elif hasattr(self, 'serial'):
+                return self.serial is not None and self.serial.is_open
+            return False
+        else:
+            # Check TCP connection
+            return (
+                self.writer is not None
+                and not self.writer.is_closing()
+                and not self.reader.at_eof()
+            )
 
     async def close(self):
-        if self.writer is not None:
+        if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+            # Close RTU/Serial connection
+            if hasattr(self, 'serial_writer'):
+                self.log.info("closing RTU connection...")
+                try:
+                    self.serial_writer.close()
+                    await self.serial_writer.wait_closed()
+                except Exception as error:
+                    self.log.info("failed to close RTU: %r", error)
+                else:
+                    self.log.info("RTU connection closed")
+                finally:
+                    self.serial_reader = None
+                    self.serial_writer = None
+            elif hasattr(self, 'serial'):
+                self.log.info("closing RTU connection...")
+                try:
+                    self.serial.close()
+                except Exception as error:
+                    self.log.info("failed to close RTU: %r", error)
+                else:
+                    self.log.info("RTU connection closed")
+                finally:
+                    self.serial = None
+        elif self.writer is not None:
+            # Close TCP connection
             self.log.info("closing connection...")
             try:
                 self.writer.close()
@@ -78,9 +138,23 @@ class Connection:
                 self.writer = None
 
     async def _write(self, data):
-        self.log.debug("sending %d bytes: %r", len(data), data)
-        self.writer.write(data)
-        await self.writer.drain()
+        if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+            # RTU/Serial write
+            if hasattr(self, 'serial_writer'):
+                # Async serial
+                self.log.trace(f"[RTU:{self.device}] → Request: %d bytes", len(data))
+                self.serial_writer.write(data)
+                await self.serial_writer.drain()
+            elif hasattr(self, 'serial'):
+                # Sync serial fallback
+                self.log.trace(f"[RTU:{self.device}] → Request: %d bytes", len(data))
+                self.serial.write(data)
+                self.serial.flush()
+        else:
+            # TCP write
+            self.log.trace(f"[TCP:{self.modbus_host}:{self.modbus_port}] → Request: %d bytes", len(data))
+            self.writer.write(data)
+            await self.writer.drain()
 
     async def write(self, data):
         try:
@@ -102,7 +176,11 @@ class Connection:
             header = await self.reader.readexactly(6)
             size = int.from_bytes(header[4:], "big")
             reply = header + await self.reader.readexactly(size)
-            self.log.debug("received %d bytes: %r", len(reply), reply)
+            
+            if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+                self.log.trace(f"[RTU:{self.device}] ← Response: %d bytes", len(reply))
+            else:
+                self.log.trace(f"[TCP:{self.modbus_host}:{self.modbus_port}] ← Response: %d bytes", len(reply))
             
             # Enhanced debug logging for modbus data
             if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
@@ -116,32 +194,35 @@ class Connection:
         # We need to read byte by byte to detect frame boundaries
         import struct
         
+        # Use appropriate reader based on connection type
+        reader = self.serial_reader if hasattr(self, 'serial_reader') else self.reader
+        
         # Read first byte (slave ID)
-        slave_id = await self.reader.readexactly(1)
+        slave_id = await reader.readexactly(1)
         
         # Read function code
-        function_code = await self.reader.readexactly(1)
+        function_code = await reader.readexactly(1)
         
         # Read data based on function code
         data = b''
         if function_code[0] in [0x01, 0x02, 0x03, 0x04]:  # Read functions
             # Read address (2 bytes) + count (2 bytes)
-            data = await self.reader.readexactly(4)
+            data = await reader.readexactly(4)
         elif function_code[0] in [0x05, 0x06]:  # Write single
             # Read address (2 bytes) + value (2 bytes)
-            data = await self.reader.readexactly(4)
+            data = await reader.readexactly(4)
         elif function_code[0] in [0x0F, 0x10]:  # Write multiple
             # Read address (2 bytes) + count (2 bytes) + byte_count + data
-            addr_count = await self.reader.readexactly(4)
-            byte_count = await self.reader.readexactly(1)
-            data = addr_count + byte_count + await self.reader.readexactly(byte_count[0])
+            addr_count = await reader.readexactly(4)
+            byte_count = await reader.readexactly(1)
+            data = addr_count + byte_count + await reader.readexactly(byte_count[0])
         
         # Read CRC (2 bytes)
-        crc = await self.reader.readexactly(2)
+        crc = await reader.readexactly(2)
         
         # Combine into RTU frame
         rtu_frame = slave_id + function_code + data + crc
-        self.log.debug("received RTU %d bytes: %r", len(rtu_frame), rtu_frame)
+        self.log.trace(f"[RTU:{self.device}] ← Response: %d bytes", len(rtu_frame))
         
         # Enhanced debug logging for RTU data
         if self.log.isEnabledFor(logging.DEBUG) and len(rtu_frame) >= 4:
@@ -251,11 +332,12 @@ class Client(Connection):
         super().__init__(f"Client({peer[0]}:{peer[1]})", reader, writer)
         self.client_ip = peer[0]
         self.client_port = peer[1]
+        self.request_count = 0
         self.log.info(f"new client connection from {self.client_ip}:{self.client_port}")
         
     async def _write(self, data):
         # Enhanced logging for client writes (responses)
-        self.log.debug(f"sending response to {self.client_ip}:{self.client_port} - %d bytes: %r", len(data), data)
+        self.log.trace(f"[{self.client_ip}:{self.client_port}] → Response: %d bytes", len(data))
         if self.log.isEnabledFor(logging.DEBUG) and len(data) >= 7:
             self._log_modbus_message(data, "sent_to_client")
         self.writer.write(data)
@@ -266,7 +348,9 @@ class Client(Connection):
         header = await self.reader.readexactly(6)
         size = int.from_bytes(header[4:], "big")
         reply = header + await self.reader.readexactly(size)
-        self.log.debug(f"received request from {self.client_ip}:{self.client_port} - %d bytes: %r", len(reply), reply)
+        
+        self.request_count += 1
+        self.log.trace(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
         
         # Enhanced debug logging for client requests
         if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
@@ -313,19 +397,56 @@ class ModBus(Connection):
     async def open(self):
         if self.modbus_type == "rtu":
             self.log.info(f"connecting to RTU device {self.device}...")
-            # For RTU, we'll use a different approach - serial connection
-            # This is a simplified implementation - in production you'd want
-            # a proper async serial library like pyserial-asyncio
-            import serial
-            self.serial = serial.Serial(
-                port=self.device,
-                baudrate=self.baudrate,
-                bytesize=self.databits,
-                parity=self.parity,
-                stopbits=self.stopbits,
-                timeout=self.timeout
-            )
-            self.log.info(f"connected to RTU device {self.device}!")
+            
+            # Check device permissions and existence
+            if not os.path.exists(self.device):
+                raise FileNotFoundError(f"Serial device {self.device} not found")
+            
+            # Check device permissions
+            try:
+                device_stat = os.stat(self.device)
+                if not stat.S_ISCHR(device_stat.st_mode):
+                    raise ValueError(f"{self.device} is not a character device")
+                
+                # Check if we have read/write permissions
+                if not os.access(self.device, os.R_OK | os.W_OK):
+                    self.log.warning(f"Insufficient permissions for {self.device}. Attempting to fix...")
+                    # Try to fix permissions (requires privileged mode)
+                    try:
+                        os.chmod(self.device, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
+                        self.log.info(f"Fixed permissions for {self.device}")
+                    except PermissionError:
+                        self.log.error(f"Cannot fix permissions for {self.device}. Run container with privileged mode.")
+                        raise
+            except Exception as e:
+                self.log.error(f"Device permission check failed: {e}")
+                raise
+            
+            # Use asyncio serial connection
+            try:
+                import serial_asyncio
+                self.serial_reader, self.serial_writer = await serial_asyncio.open_serial_connection(
+                    url=self.device,
+                    baudrate=self.baudrate,
+                    bytesize=self.databits,
+                    parity=self.parity,
+                    stopbits=self.stopbits,
+                    timeout=self.timeout
+                )
+                self.log.info(f"connected to RTU device {self.device}!")
+            except ImportError:
+                # Fallback to synchronous serial if asyncio version not available
+                self.log.warning("pyserial-asyncio not available, using synchronous fallback")
+                import serial
+                self.serial = serial.Serial(
+                    port=self.device,
+                    baudrate=self.baudrate,
+                    bytesize=self.databits,
+                    parity=self.parity,
+                    stopbits=self.stopbits,
+                    timeout=self.timeout
+                )
+                self.log.info(f"connected to RTU device {self.device} (sync mode)!")
         else:
             self.log.info("connecting to modbus...")
             self.reader, self.writer = await asyncio.open_connection(
@@ -382,6 +503,13 @@ class ModBus(Connection):
                 request = await client.read()
                 if not request:
                     break
+                
+                # Log proxy activity overview
+                if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+                    self.log.trace(f"PROXY: {client.client_ip}:{client.client_port} → RTU:{self.device} (Request #{client.request_count})")
+                else:
+                    self.log.trace(f"PROXY: {client.client_ip}:{client.client_port} → TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count})")
+                
                 reply = await self.write_read(self._transform_request(request))
                 if not reply:
                     break

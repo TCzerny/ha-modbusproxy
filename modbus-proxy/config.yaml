@@ -1,7 +1,7 @@
 name: "Modbus Proxy"
 version: "2.2.0"
 slug: "modbus_proxy"
-description: "A powerful multi-device Modbus TCP proxy"
+description: "A powerful multi-device Modbus TCP and RTU proxy"
 arch:
   - aarch64
   - amd64
@@ -11,36 +11,54 @@ url: "https://github.com/TCzerny/ha-modbusproxy"
 startup: services
 init: false
 host_network: true
+privileged: true
+devices:
+  - "/dev/ttyUSB0"
+  - "/dev/ttyUSB1"
+  - "/dev/ttyACM0"
+  - "/dev/serial/by-id/"
 options:
+  log_level: "trace"
+  auto_detect_device: true
   modbus_devices:
     - name: "Solar Inverter 1"
+      protocol: "tcp"
       host: "192.168.1.100"
       port: 502
       bind_port: 502
       timeout: 10.0
       connection_time: 2.0
     - name: "Solar Inverter 2"
+      protocol: "tcp"
       host: "192.168.1.101"
       bind_port: 503
       timeout: 10.0
       connection_time: 2.0
     - name: "RTU Device 1"
+      protocol: "rtu"
       device: "/dev/ttyUSB0"
       baudrate: 9600
+      databits: 8
+      stopbits: 1
+      parity: "N"
       bind_port: 504
       timeout: 5.0
       connection_time: 1.0
-    - name: "Serial Device 1"
-      device: "/dev/ttyACM0"
+    - name: "Auto-Detected Serial Device"
+      protocol: "rtu"
       baudrate: 115200
+      databits: 8
+      stopbits: 1
+      parity: "N"
       bind_port: 505
       timeout: 3.0
       connection_time: 0.5
-  log_level: "info"
 schema:
-  log_level: "list(info|warning|error|debug)?"
+  log_level: "list(info|warning|error|debug|trace)?"
+  auto_detect_device: "bool?"
   modbus_devices:
     - name: "str?"
+      protocol: "list(tcp|rtu)"
       # TCP Modbus parameters
       host: "str?"
       port: "port?"

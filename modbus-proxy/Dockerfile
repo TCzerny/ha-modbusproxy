@@ -19,7 +19,7 @@ COPY src/modbus_proxy.py /srv/venv/bin/modbus-proxy
 
 # Install dependencies
 RUN cd /srv && source ./venv/bin/activate && \
-    pip install PyYAML pyserial
+    pip install PyYAML pyserial pyserial-asyncio
 
 # Make executable
 RUN chmod +x /srv/venv/bin/modbus-proxy

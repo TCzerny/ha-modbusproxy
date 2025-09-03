@@ -11,12 +11,15 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 - 📡 **Serial Communication**: Support for USB-to-Serial adapters and RS485 devices
 - ⚙️ **Configurable Serial Parameters**: Baudrate, databits, stopbits, parity
 - 🔍 **RTU Debug Logging**: Enhanced logging for RTU protocol messages
+- 🔍 **Auto-Detection**: Automatically detect serial devices for plug & play setup
 
 **Enhanced Logging & Debug Features:**
 - 🔍 **Client IP Tracking**: Every log entry shows the client's IP address and port
 - 📊 **Debug Value Parsing**: At DEBUG level, see actual Modbus register values and coil states
 - 🎯 **Detailed Request/Response Logging**: Transaction IDs, Unit IDs, Function Codes
 - ⚡ **Performance Monitoring**: Response times and connection statistics
+- 🔍 **TRACE Level**: New logging level for proxy activity overview and IP tracking
+- 📈 **Request Counting**: Track number of requests per client connection
 
 **Example Debug Output (TCP):**
 ```
@@ -45,6 +48,10 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 - 🚀 Host network mode for optimal performance
 - 🔍 Real-time client IP monitoring and request tracking
 - 🔌 RTU/Serial Modbus support with configurable serial parameters
+- 🔍 **Auto-Detection**: Plug & play serial device detection
+- ⚡ **Asyncio Serial**: Non-blocking serial communication
+- 🛡️ **Udev Integration**: Automatic device permissions
+- 📈 **Request Counting**: Track requests per client connection
 
 ## Installation
 
@@ -83,13 +90,14 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID (e.g., `1: 10`) |
 | `timeout` | No | `10.0` | Connection timeout in seconds |
 | `connection_time` | No | `2.0` | Time to establish connection in seconds |
-| `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
+| `log_level` | No | `trace` | Logging level: `trace`, `debug`, `info`, `warning`, `error` |
 
 #### RTU/Serial Modbus Parameters
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | No | `Device X` | Friendly name for the device |
-| `device` | **Yes** (for RTU) | - | Serial device path (e.g., `/dev/ttyUSB0`) |
+| `protocol` | No | Auto-detected | Protocol type: `tcp` or `rtu` |
+| `device` | No* | - | Serial device path (e.g., `/dev/ttyUSB0`) |
 | `baudrate` | No | `9600` | Serial baudrate |
 | `databits` | No | `8` | Number of data bits |
 | `stopbits` | No | `1` | Number of stop bits |
@@ -98,6 +106,41 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID |
 | `timeout` | No | `5.0` | Connection timeout in seconds |
 | `connection_time` | No | `1.0` | Time to establish connection in seconds |
+| `log_level` | No | `trace` | Logging level: `trace`, `debug`, `info`, `warning`, `error` |
+
+*`device` is optional when `auto_detect_device: true` is enabled
+
+### Auto-Detection Configuration
+
+The add-on can automatically detect serial devices for plug & play setup:
+
+```yaml
+# Enable auto-detection
+auto_detect_device: true
+
+modbus_devices:
+  - name: "Auto-Detected Solar Inverter"
+    protocol: "rtu"
+    baudrate: 9600
+    databits: 8
+    stopbits: 1
+    parity: "N"
+    bind_port: 502
+    timeout: 5.0
+    connection_time: 1.0
+```
+
+**Auto-Detection Priority:**
+1. `/dev/serial/by-id/*` - Stable device identifiers
+2. `/dev/ttyUSB0` - Common USB-to-Serial adapter
+3. `/dev/ttyACM0` - Arduino/ACM devices
+4. Any `/dev/ttyUSB*` or `/dev/ttyACM*` device
+
+**Benefits:**
+- 🔌 **Plug & Play**: No manual device path configuration
+- 🔄 **Hot-Swappable**: Automatically adapts to device changes
+- 🛡️ **Error Prevention**: Reduces configuration mistakes
+- ⚡ **Quick Setup**: Faster initial configuration
 
 ### Advanced Configuration Examples
 
@@ -215,9 +258,51 @@ Connection refused to 192.168.1.100:502
 2. Increase the `connection_time` value
 3. Check network connectivity and latency
 
-### Enhanced Debugging & Monitoring
+### Enhanced Logging & Monitoring
 
-Enable debug logging to get detailed information including client tracking and value parsing:
+The add-on provides multiple logging levels for different monitoring needs:
+
+#### Logging Levels
+
+| Level | Description | Use Case |
+|-------|-------------|----------|
+| **`trace`** | Proxy activity overview | Monitor which IPs connect and what they request |
+| **`debug`** | Detailed Modbus parsing | See actual register values and function codes |
+| **`info`** | Connection status | Basic connection and error information |
+| **`warning`** | Warnings only | Important issues that don't break functionality |
+| **`error`** | Errors only | Critical problems only |
+
+#### TRACE Level - Proxy Activity Overview
+
+Perfect for monitoring which devices connect to your proxy and what they're doing:
+
+```yaml
+log_level: "trace"
+```
+
+**Example TRACE Output:**
+```
+2024-12-19 10:30:15 INFO  [Client(192.168.1.50:45231)] new client connection from 192.168.1.50:45231
+2024-12-19 10:30:16 TRACE [Client(192.168.1.50:45231)] ← Request #1: 12 bytes
+2024-12-19 10:30:16 TRACE PROXY: 192.168.1.50:45231 → TCP:192.168.1.100:502 (Request #1)
+2024-12-19 10:30:16 TRACE [TCP:192.168.1.100:502] → Request: 12 bytes
+2024-12-19 10:30:16 TRACE [TCP:192.168.1.100:502] ← Response: 15 bytes
+2024-12-19 10:30:16 TRACE [Client(192.168.1.50:45231)] → Response: 15 bytes
+```
+
+**Example TRACE Output (RTU):**
+```
+2024-12-19 10:30:15 INFO  [Client(192.168.1.51:45232)] new client connection from 192.168.1.51:45232
+2024-12-19 10:30:16 TRACE [Client(192.168.1.51:45232)] ← Request #1: 8 bytes
+2024-12-19 10:30:16 TRACE PROXY: 192.168.1.51:45232 → RTU:/dev/ttyUSB0 (Request #1)
+2024-12-19 10:30:16 TRACE [RTU:/dev/ttyUSB0] → Request: 8 bytes
+2024-12-19 10:30:16 TRACE [RTU:/dev/ttyUSB0] ← Response: 11 bytes
+2024-12-19 10:30:16 TRACE [Client(192.168.1.51:45232)] → Response: 11 bytes
+```
+
+#### DEBUG Level - Detailed Modbus Parsing
+
+For detailed analysis of Modbus messages and values:
 
 ```yaml
 log_level: "debug"
@@ -250,15 +335,44 @@ log_level: "debug"
 **Important Notes for RTU Devices:**
 - 🔌 **Serial Port Access**: The add-on needs access to serial ports on the host
 - 📁 **Device Paths**: Common paths are `/dev/ttyUSB0`, `/dev/ttyACM0`, `/dev/ttyS0`
-- 🔧 **Permissions**: Ensure the container has read/write access to serial devices
+- 🔧 **Permissions**: Automatic permission handling with udev integration
 - 📊 **Baudrate**: Must match your device's communication speed
 - 🔄 **Parity**: Common values are `N` (None), `E` (Even), `O` (Odd)
+- ⚡ **Asyncio Support**: Non-blocking serial communication for better performance
+
+**Enhanced Features:**
+- 🔍 **Auto-Detection**: Automatically find and configure serial devices
+- 🛡️ **Udev Rules**: Automatic permission setting for USB-Serial adapters
+- ⚡ **Asyncio Serial**: Improved performance with non-blocking I/O
+- 🔄 **Hot-Plug**: Support for device hot-swapping
+- 📈 **Request Tracking**: Monitor serial communication activity
 
 **Troubleshooting RTU Connections:**
 - Check if the serial device exists: `ls -la /dev/tty*`
 - Verify device permissions: `ls -la /dev/ttyUSB0`
 - Test serial communication: `stty -F /dev/ttyUSB0 9600`
 - Check for device conflicts: `dmesg | grep tty`
+- Monitor auto-detection: Check logs for "Auto-detecting serial device"
+
+### Technical Improvements
+
+**Enhanced Serial Communication:**
+- ⚡ **Asyncio Serial**: Non-blocking serial I/O using `pyserial-asyncio`
+- 🔄 **Fallback Support**: Graceful fallback to synchronous serial if needed
+- 🛡️ **Permission Management**: Automatic device permission handling
+- 🔍 **Device Validation**: Comprehensive device existence and permission checks
+
+**Udev Integration:**
+- 🔧 **Automatic Permissions**: udev rules for common USB-Serial adapters
+- 🔌 **Hot-Plug Support**: Automatic device detection and configuration
+- 🛡️ **Permission Fixing**: Attempts to fix device permissions automatically
+- 📋 **Device Mapping**: Support for `/dev/serial/by-id/` stable identifiers
+
+**Enhanced Error Handling:**
+- 🔍 **Device Validation**: Checks device existence and permissions
+- 🛡️ **Graceful Degradation**: Fallback mechanisms for various scenarios
+- 📊 **Detailed Logging**: Comprehensive error reporting and debugging
+- 🔄 **Connection Recovery**: Automatic reconnection attempts
 
 ### Network Configuration
 

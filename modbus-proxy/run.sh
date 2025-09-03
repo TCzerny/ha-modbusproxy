@@ -3,6 +3,53 @@ set -e
 
 CONFIG_PATH="/srv/modbus.config.yaml"
 LOG_LEVEL=$(bashio::config 'log_level' 'info')
+AUTO_DETECT_DEVICE=$(bashio::config 'auto_detect_device' 'false')
+
+# Auto-detect serial device function
+autodetect_serial_device() {
+    echo "🔍 Auto-detecting serial device..."
+    
+    # First try stable by-id paths
+    if [ -d "/dev/serial/by-id" ]; then
+        DEVICES=$(ls /dev/serial/by-id/ 2>/dev/null | head -1)
+        if [ -n "$DEVICES" ]; then
+            DETECTED_DEVICE="/dev/serial/by-id/$DEVICES"
+            echo "✅ Found stable device: $DETECTED_DEVICE"
+            return 0
+        fi
+    fi
+    
+    # Fallback to generic paths
+    if [ -e "/dev/ttyUSB0" ]; then
+        DETECTED_DEVICE="/dev/ttyUSB0"
+        echo "✅ Found USB device: $DETECTED_DEVICE"
+        return 0
+    fi
+    
+    if [ -e "/dev/ttyACM0" ]; then
+        DETECTED_DEVICE="/dev/ttyACM0"
+        echo "✅ Found ACM device: $DETECTED_DEVICE"
+        return 0
+    fi
+    
+    # Check for any ttyUSB or ttyACM devices
+    USB_DEVICES=$(ls /dev/ttyUSB* 2>/dev/null | head -1)
+    if [ -n "$USB_DEVICES" ]; then
+        DETECTED_DEVICE="$USB_DEVICES"
+        echo "✅ Found USB device: $DETECTED_DEVICE"
+        return 0
+    fi
+    
+    ACM_DEVICES=$(ls /dev/ttyACM* 2>/dev/null | head -1)
+    if [ -n "$ACM_DEVICES" ]; then
+        DETECTED_DEVICE="$ACM_DEVICES"
+        echo "✅ Found ACM device: $DETECTED_DEVICE"
+        return 0
+    fi
+    
+    echo "❌ No serial device found"
+    return 1
+}
 
 # Fallback if LOG_LEVEL is null or empty
 if [ -z "$LOG_LEVEL" ] || [ "$LOG_LEVEL" = "null" ]; then
@@ -43,6 +90,7 @@ while true; do
         break
     fi
     
+    PROTOCOL=$(bashio::config "modbus_devices[${DEVICE_COUNT}].protocol" "" 2>/dev/null || echo "")
     HOST=$(bashio::config "modbus_devices[${DEVICE_COUNT}].host" "" 2>/dev/null || echo "")
     DEVICE=$(bashio::config "modbus_devices[${DEVICE_COUNT}].device" "" 2>/dev/null || echo "")
     BIND_PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].bind_port" "")
@@ -56,8 +104,21 @@ while true; do
         continue
     fi
     
+    # Determine protocol - use explicit protocol or fallback to host/device detection
+    if [ -n "$PROTOCOL" ] && [ "$PROTOCOL" != "null" ]; then
+        DEVICE_TYPE="$PROTOCOL"
+    elif [ -n "$HOST" ] && [ "$HOST" != "null" ]; then
+        DEVICE_TYPE="tcp"
+    elif [ -n "$DEVICE" ] && [ "$DEVICE" != "null" ]; then
+        DEVICE_TYPE="rtu"
+    else
+        echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – no protocol, host, or device specified"
+        DEVICE_COUNT=$((DEVICE_COUNT+1))
+        continue
+    fi
+    
     # Check if it's a TCP or RTU/Serial device
-    if [ -n "$HOST" ] && [ "$HOST" != "null" ]; then
+    if [ "$DEVICE_TYPE" = "tcp" ]; then
         # TCP Modbus device
         PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].port" "502")
         echo "✅ $NAME: TCP $HOST:$PORT -> :$BIND_PORT"
@@ -67,12 +128,30 @@ while true; do
   - modbus:
       url: $HOST:$PORT
 EOF
-    elif [ -n "$DEVICE" ] && [ "$DEVICE" != "null" ]; then
+    elif [ "$DEVICE_TYPE" = "rtu" ]; then
         # RTU/Serial Modbus device
         BAUDRATE=$(bashio::config "modbus_devices[${DEVICE_COUNT}].baudrate" "9600")
         DATABITS=$(bashio::config "modbus_devices[${DEVICE_COUNT}].databits" "8")
         STOPBITS=$(bashio::config "modbus_devices[${DEVICE_COUNT}].stopbits" "1")
         PARITY=$(bashio::config "modbus_devices[${DEVICE_COUNT}].parity" "N")
+        
+        # Auto-detect device if not specified and auto-detect is enabled
+        if [ -z "$DEVICE" ] || [ "$DEVICE" = "null" ]; then
+            if [ "$AUTO_DETECT_DEVICE" = "true" ]; then
+                if autodetect_serial_device; then
+                    DEVICE="$DETECTED_DEVICE"
+                    echo "🔍 Auto-detected device for $NAME: $DEVICE"
+                else
+                    echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – no device specified and auto-detect failed"
+                    DEVICE_COUNT=$((DEVICE_COUNT+1))
+                    continue
+                fi
+            else
+                echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – no device specified and auto-detect disabled"
+                DEVICE_COUNT=$((DEVICE_COUNT+1))
+                continue
+            fi
+        fi
         
         echo "✅ $NAME: RTU $DEVICE ($BAUDRATE/$DATABITS/$PARITY/$STOPBITS) -> :$BIND_PORT"
         
@@ -86,7 +165,7 @@ EOF
       parity: $PARITY
 EOF
     else
-        echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – neither host nor device specified"
+        echo "⚠️ Device #$((DEVICE_COUNT+1)) skipped – invalid protocol: $DEVICE_TYPE"
         DEVICE_COUNT=$((DEVICE_COUNT+1))
         continue
     fi
@@ -132,6 +211,15 @@ echo "✅ $VALID_DEVICES valid devices configured"
 
 echo "📄 Generated Config:"
 cat "$CONFIG_PATH"
+
+# Setup udev rules for serial devices
+echo "🔧 Setting up udev rules for serial devices..."
+if [ -d "/etc/udev/rules.d" ]; then
+    # Reload udev rules
+    udevadm control --reload-rules
+    udevadm trigger
+    echo "✅ Udev rules reloaded"
+fi
 
 # Activate venv if exists
 if [ -f "/srv/venv/bin/activate" ]; then

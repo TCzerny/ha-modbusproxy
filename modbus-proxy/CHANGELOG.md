@@ -1,5 +1,55 @@
 # Changelog
 
+## [2.2.0] - 2024-12-19
+
+### Added
+- **RTU/Serial Modbus Support** - Full support for Modbus RTU over serial connections
+- **Auto-Detection** - Plug & play serial device detection with priority-based device selection
+- **TRACE Logging Level** - New logging level for proxy activity overview and IP tracking
+- **Request Counting** - Track number of requests per client connection
+- **Protocol Field** - Explicit protocol specification (`tcp` or `rtu`)
+- **Asyncio Serial Support** - Non-blocking serial communication using `pyserial-asyncio`
+- **Udev Integration** - Automatic device permissions and hot-plug support
+- **Enhanced IP Tracking** - Detailed client IP monitoring and request tracking
+- **Device Permission Management** - Automatic permission handling and validation
+
+### Enhanced
+- **Serial Communication** - Improved RTU/Serial support with fallback mechanisms
+- **Error Handling** - Comprehensive device validation and graceful degradation
+- **Logging System** - Enhanced logging with detailed proxy activity monitoring
+- **Device Management** - Better serial device detection and configuration
+- **Connection Management** - Improved connection recovery and stability
+
+### Technical Improvements
+- **modbus_proxy.py v0.8.1** - Updated core proxy implementation with enhanced features
+- **Dockerfile** - Added `pyserial-asyncio` and system packages for serial support
+- **Udev Rules** - Automatic permission setting for USB-Serial adapters
+- **Auto-Detection Priority** - Stable device identifiers, USB adapters, ACM devices
+- **Permission Validation** - Comprehensive device existence and permission checks
+
+### Core Proxy Updates (modbus_proxy.py v0.8.1)
+- **Custom TRACE Level** - New logging level (5) for proxy activity overview
+- **Asyncio Serial Support** - Non-blocking serial I/O with fallback to synchronous
+- **Enhanced IP Tracking** - Client IP and port tracking in all log messages
+- **Request Counting** - Per-client request counter for activity monitoring
+- **Device Permission Checks** - Comprehensive device validation and permission handling
+- **Improved Error Handling** - Better exception handling and connection recovery
+- **RTU Message Parsing** - Enhanced RTU protocol message parsing and logging
+
+### Configuration Changes
+- Added `auto_detect_device` option (default: `true`)
+- Added `protocol` field for explicit protocol specification
+- Extended RTU parameters: `device`, `baudrate`, `databits`, `stopbits`, `parity`
+- Updated logging levels: `trace`, `debug`, `info`, `warning`, `error`
+
+### Breaking Changes
+- **None** - This version is fully backward compatible with 2.1.0
+
+### Known Issues
+- Serial device auto-detection requires `privileged: true` mode
+- Some USB-Serial adapters may need manual permission configuration
+- RTU communication performance depends on device response times
+
 ## [2.1.0] - 2024-08-27
 
 ### Added

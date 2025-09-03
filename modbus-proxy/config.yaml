@@ -18,12 +18,12 @@ options:
       port: 502
       bind_port: 502
       timeout: 10.0
-      connection_time: 2.0
+      connection_time: 0.1
     - name: "Solar Inverter 2"
       host: "192.168.1.101"
       bind_port: 504
       timeout: 10.0
-      connection_time: 2.0
+      connection_time: 0.1
   log_level: "info"
 schema:
   log_level: "list(info|warning|error|debug)?"

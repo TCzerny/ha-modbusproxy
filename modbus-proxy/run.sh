@@ -148,6 +148,16 @@ while true; do
   - modbus:
       url: $HOST:$PORT
 EOF
+    elif [ "$DEVICE_TYPE" = "rtutcp" ]; then
+        # Modbus RTU over TCP device
+        PORT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].port" "502")
+        echo "✅ $NAME: TCP $HOST:$PORT -> :$BIND_PORT"
+        
+        # Add TCP device to YAML configuration
+        cat >> "$CONFIG_PATH" <<EOF
+  - modbus:
+      url: rtutcp://$HOST:$PORT
+EOF
     elif [ "$DEVICE_TYPE" = "rtu" ]; then
         # RTU/Serial Modbus device
         HAS_RTU_DEVICES="true"

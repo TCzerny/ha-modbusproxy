@@ -524,7 +524,7 @@ class ModBus(Connection):
         return await self._read()
 
 		
-    def _crc(data):
+    def _crc(self,data):
         crc = 0xffff
         for n in range(len(data)):
             crc ^= data[n]
@@ -546,7 +546,7 @@ class ModBus(Connection):
                 request = bytearray(request)
                 request[0] = new_uid
 
-                request = request[0:-2] + _crc(request[-2:]).to_bytes(2, byteorder='little')
+                request = request[0:-2] + self._crc(request[0:-2]).to_bytes(2, byteorder='little')
 				
                 self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
             return request
@@ -572,7 +572,7 @@ class ModBus(Connection):
                 reply = bytearray(reply)
                 reply[0] = new_uid
 				
-                reply = reply[0:-2] + _crc(reply[-2:]).to_bytes(2, byteorder='little')
+                reply = reply[0:-2] + self._crc(reply[0:-2]).to_bytes(2, byteorder='little')
 				
                 self.log.debug("remapping unit ID %s to %s in reply", uid, new_uid)
             return reply

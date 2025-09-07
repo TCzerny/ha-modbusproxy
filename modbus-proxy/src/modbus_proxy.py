@@ -17,9 +17,10 @@ import os
 import stat
 from urllib.parse import urlparse
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 # Changelog:
+# 0.8.2 - Add RTU(over)TCP, fix RTU issues
 # 0.8.1 - Enhanced logging system with TRACE level, improved RTU support with asyncio serial
 #         - Added custom TRACE logging level for proxy activity overview
 #         - Improved RTU/Serial support with pyserial-asyncio
@@ -156,9 +157,9 @@ class Connection:
         return True
 
     async def _read(self):
-        """Read ModBus TCP message"""
+        """Read ModBus TCP message from server ie response"""
         # Handle Modbus TCP, RTU and ASCII
-        if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+        if hasattr(self, 'modbus_type') and ( self.modbus_type == 'rtu' or self.modbus_type == 'rtutcp'):
             # RTU/Serial Modbus - different protocol
             return await self._read_rtu()
         else:
@@ -167,10 +168,7 @@ class Connection:
             size = int.from_bytes(header[4:], "big")
             reply = header + await self.reader.readexactly(size)
             
-            if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
-                self.log.debug(f"[RTU:{self.device}] ← Response: %d bytes", len(reply))
-            else:
-                self.log.debug(f"[TCP:{self.modbus_host}:{self.modbus_port}] ← Response: %d bytes", len(reply))
+            self.log.debug(f"[TCP:{self.modbus_host}:{self.modbus_port}] ← Response: %d bytes", len(reply))
             
             # Enhanced debug logging for modbus data
             if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
@@ -179,7 +177,7 @@ class Connection:
             return reply
     
     async def _read_rtu(self):
-        """Read ModBus RTU message"""
+        """Read ModBus RTU message from server ie response"""
         # RTU protocol: [slave_id][function_code][data][crc_low][crc_high]
         # We need to read byte by byte to detect frame boundaries
         import struct
@@ -196,23 +194,23 @@ class Connection:
         # Read data based on function code
         data = b''
         if function_code[0] in [0x01, 0x02, 0x03, 0x04]:  # Read functions
-            # Read address (2 bytes) + count (2 bytes)
-            data = await reader.readexactly(4)
-        elif function_code[0] in [0x05, 0x06]:  # Write single
+            # Read byte count, then (address (2 bytes) + value (2 bytes)) times byte count/4 
+            byte_count = await reader.readexactly(1)
+            data = byte_count + await reader.readexactly(byte_count[0])
+        elif function_code[0] in [0x05, 0x06, 0x0F, 0x10]:  # Write single, Write multiple
             # Read address (2 bytes) + value (2 bytes)
             data = await reader.readexactly(4)
-        elif function_code[0] in [0x0F, 0x10]:  # Write multiple
-            # Read address (2 bytes) + count (2 bytes) + byte_count + data
-            addr_count = await reader.readexactly(4)
-            byte_count = await reader.readexactly(1)
-            data = addr_count + byte_count + await reader.readexactly(byte_count[0])
         
         # Read CRC (2 bytes)
         crc = await reader.readexactly(2)
         
         # Combine into RTU frame
         rtu_frame = slave_id + function_code + data + crc
-        self.log.debug(f"[RTU:{self.device}] ← Response: %d bytes", len(rtu_frame))
+
+        if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
+            self.log.debug(f"[RTU:{self.device}] ← Response: %d bytes", len(rtu_frame))
+        else:
+            self.log.debug(f"[RTUoverTCP:{self.modbus_host}:{self.modbus_port}] ← Response: %d bytes", len(rtu_frame))
         
         # Enhanced debug logging for RTU data
         if self.log.isEnabledFor(logging.DEBUG) and len(rtu_frame) >= 4:
@@ -281,6 +279,7 @@ class Connection:
             return
             
         try:
+            import struct
             # Parse RTU frame: [slave_id][function_code][data][crc_low][crc_high]
             slave_id = data[0]
             function_code = data[1]
@@ -310,7 +309,15 @@ class Connection:
                             if i + 1 < len(values_data):
                                 value = struct.unpack('>H', values_data[i:i+2])[0]
                                 values.append(value)
-                        self.log.debug(f"RTU Registers: {values[:8]}{'...' if len(values) > 8 else ''}")
+                        self.log.debug(f"RTU Values: {values[:8]}{'...' if len(values) > 8 else ''}")
+
+            # Parse function-specific data for read responses
+            if direction == "received_from_client" and function_code in [0x01, 0x02, 0x03, 0x04] and len(rtu_data) >= 4:
+                values = []
+                for i in range(0, len(rtu_data)-1, 2):
+                    value = struct.unpack('>H', rtu_data[i:i+2])[0]
+                    values.append(value)
+                self.log.debug(f"RTU Registers: {values[:8]}{'...' if len(values) > 8 else ''}")
                         
         except Exception as e:
             self.log.debug(f"Failed to parse RTU message: {e}")
@@ -328,26 +335,72 @@ class Client(Connection):
     async def _write(self, data):
         # Enhanced logging for client writes (responses)
         self.log.debug(f"[{self.client_ip}:{self.client_port}] → Response: %d bytes", len(data))
-        if self.log.isEnabledFor(logging.DEBUG) and len(data) >= 7:
-            self._log_modbus_message(data, "sent_to_client")
+        if self.log.isEnabledFor(logging.DEBUG):
+            if hasattr(self, 'modbus_type') and self.modbus_type == 'tcp':		
+                if len(data) >= 7:		
+                    self._log_modbus_message(data, "sent_to_client")
+                elif len(data) >= 4:
+                    self._log_rtu_message(data, "sent_to_client")
         self.writer.write(data)
         await self.writer.drain()
         
     async def _read(self):
-        """Read ModBus TCP message from client"""
-        header = await self.reader.readexactly(6)
-        size = int.from_bytes(header[4:], "big")
-        reply = header + await self.reader.readexactly(size)
-        
-        self.request_count += 1
-        self.log.debug(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
-        
-        # Enhanced debug logging for client requests
-        if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
-            self._log_modbus_message(reply, "received_from_client")
-        
-        return reply
+        """Read ModBus TCP or RTUoverTCP message from client"""
+		
+        if hasattr(self, 'modbus_type') and self.modbus_type == 'tcp':
+		
+            header = await self.reader.readexactly(6)
+            size = int.from_bytes(header[4:], "big")
+            reply = header + await self.reader.readexactly(size)
+            
+            self.request_count += 1
+            self.log.debug(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
+            
+            # Enhanced debug logging for client requests
+            if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
+                self._log_modbus_message(reply, "received_from_client")
+            
+            return reply
 
+        else:
+            # Use appropriate reader based on connection type
+            reader = self.serial_reader if hasattr(self, 'serial_reader') else self.reader
+            
+            # Read first byte (slave ID)
+            slave_id = await reader.readexactly(1)
+            
+            # Read function code
+            function_code = await reader.readexactly(1)
+            
+            # Read data based on function code
+            data = b''
+            if function_code[0] in [0x01, 0x02, 0x03, 0x04]:  # Read functions
+                # Read address (2 bytes) + count (2 bytes)
+                data = await reader.readexactly(4)
+            elif function_code[0] in [0x05, 0x06]:  # Write single
+                # Read address (2 bytes) + value (2 bytes)
+                data = await reader.readexactly(4)
+            elif function_code[0] in [0x0F, 0x10]:  # Write multiple
+                # Read address (2 bytes) + count (2 bytes) + byte_count + data
+                addr_count = await reader.readexactly(4)
+                byte_count = await reader.readexactly(1)
+                data = addr_count + byte_count + await reader.readexactly(byte_count[0])
+            
+            # Read CRC (2 bytes)
+            crc = await reader.readexactly(2)
+            
+            # Combine into RTU frame
+            reply = slave_id + function_code + data + crc
+   	   	
+            self.request_count += 1
+            self.log.debug(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
+            
+            # Enhanced debug logging for client requests
+            if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 4:
+                self._log_rtu_message(reply, "received_from_client")
+            
+            return reply
+				
 
 class ModBus(Connection):
     def __init__(self, config):
@@ -365,6 +418,11 @@ class ModBus(Connection):
             self.databits = modbus.get("databits", 8)
             self.stopbits = modbus.get("stopbits", 1)
             self.parity = modbus.get("parity", "N")
+        elif url.scheme == "rtutcp":
+            self.modbus_type = "rtutcp"
+            super().__init__(f"ModBus({url.hostname}:{url.port})", None, None)
+            self.modbus_host = url.hostname
+            self.modbus_port = url.port
         else:
             self.modbus_type = "tcp"
             super().__init__(f"ModBus({url.hostname}:{url.port})", None, None)
@@ -465,26 +523,73 @@ class ModBus(Connection):
         await self._write(data)
         return await self._read()
 
+		
+    def _crc(data):
+        crc = 0xffff
+        for n in range(len(data)):
+            crc ^= data[n]
+            for i in range(8):
+                if crc & 1:
+                    crc >>= 1
+                    crc ^= 0xA001
+                else:
+                    crc >>= 1
+        return crc				
+		
     def _transform_request(self, request):
-        uid = request[6]
-        new_uid = self.unit_id_remapping.setdefault(uid, uid)
-        if uid != new_uid:
-            request = bytearray(request)
-            request[6] = new_uid
-            self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
-        return request
+	
+        if( self.modbus_type == "rtutcp" or self.modbus_type == "rtu"):
+	
+            uid = request[0]
+            new_uid = self.unit_id_remapping.setdefault(uid, uid)
+            if uid != new_uid:
+                request = bytearray(request)
+                request[0] = new_uid
+
+                request = request[0:-2] + _crc(request[-2:]).to_bytes(2, byteorder='little')
+				
+                self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
+            return request
+	
+	
+        else:	
+            uid = request[6]
+            new_uid = self.unit_id_remapping.setdefault(uid, uid)
+            if uid != new_uid:
+                request = bytearray(request)
+                request[6] = new_uid
+                self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
+            return request
 
     def _transform_reply(self, reply):
-        uid = reply[6]
-        inverse_unit_id_map = {v: k for k, v in self.unit_id_remapping.items()}
-        new_uid = inverse_unit_id_map.setdefault(uid, uid)
-        if uid != new_uid:
-            reply = bytearray(reply)
-            reply[6] = new_uid
-            self.log.debug("remapping unit ID %s to %s in reply", uid, new_uid)
-        return reply
+	
+        if( self.modbus_type == "rtutcp" or self.modbus_type == "rtu"):
+	
+            uid = reply[0]
+            inverse_unit_id_map = {v: k for k, v in self.unit_id_remapping.items()}
+            new_uid = inverse_unit_id_map.setdefault(uid, uid)
+            if uid != new_uid:
+                reply = bytearray(reply)
+                reply[0] = new_uid
+				
+                reply = reply[0:-2] + _crc(reply[-2:]).to_bytes(2, byteorder='little')
+				
+                self.log.debug("remapping unit ID %s to %s in reply", uid, new_uid)
+            return reply
+	
+        else:		
+            uid = reply[6]
+            inverse_unit_id_map = {v: k for k, v in self.unit_id_remapping.items()}
+            new_uid = inverse_unit_id_map.setdefault(uid, uid)
+            if uid != new_uid:
+                reply = bytearray(reply)
+                reply[6] = new_uid
+                self.log.debug("remapping unit ID %s to %s in reply", uid, new_uid)
+            return reply
 
     async def handle_client(self, reader, writer):
+	
+	
         async with Client(reader, writer) as client:
             while True:
                 request = await client.read()
@@ -494,6 +599,8 @@ class ModBus(Connection):
                 # Log proxy activity overview
                 if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
                     self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → RTU:{self.device} (Request #{client.request_count})")
+                elif hasattr(self, 'modbus_type') and self.modbus_type == 'rtutcp':
+                    self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → RTU(over)TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count})")
                 else:
                     self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count})")
                 
@@ -519,7 +626,7 @@ class ModBus(Connection):
         if self.server is None:
             await self.start()
         async with self.server:
-            device_info = f"Device({self.modbus_host}:{self.modbus_port})" if self.modbus_type == "tcp" else f"Device({self.device})"
+            device_info = f"Device({self.modbus_host}:{self.modbus_port})" if self.modbus_type == "tcp" or self.modbus_type == "rtutcp" else f"Device({self.device})"
             self.log.info(f"Ready to accept requests on {self.host}:{self.port} for {device_info}")
             await self.server.serve_forever()
 

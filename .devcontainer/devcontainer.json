@@ -1,0 +1,22 @@
+{
+  "name": "HA Add-on Dev",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "homeassistant",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "mounts": [
+    "source=${localWorkspaceFolder}/custom_components/modbus_proxy,target=/config/custom_components/modbus_proxy,type=bind",
+    "source=${localWorkspaceFolder}/config,target=/config,type=bind"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+  "postCreateCommand": "pip install pre-commit && pre-commit install"
+}

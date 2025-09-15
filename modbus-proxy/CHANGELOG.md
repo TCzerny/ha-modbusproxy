@@ -1,9 +1,11 @@
 # Changelog
 
-## [2.2.0] - 2024-12-19
+## [2.2.0-beta] - 2025-09-15
 
 ### Added
 - **RTU/Serial Modbus Support** - Full support for Modbus RTU over serial connections
+- **RTU over TCP Support** - Support for Modbus RTU over TCP connections
+- **Simplified Unit ID Remapping** - New simple syntax `1<>10,2<>20` instead of JSON
 - **Auto-Detection** - Plug & play serial device detection with priority-based device selection
 - **Enhanced INFO Messages** - Clear Client ↔ Proxy ↔ Device tracking with improved connection status
 - **Request Counting** - Track number of requests per client connection
@@ -42,9 +44,11 @@
 - Added `protocol` field for explicit protocol specification
 - Extended RTU parameters: `device`, `baudrate`, `databits`, `stopbits`, `parity`
 - Updated logging levels: `debug`, `info`, `warning`, `error`
+- **Simplified Unit ID Remapping Syntax** - New format: `"1<>10,2<>20"` (backward compatible with JSON)
 
 ### Breaking Changes
 - **None** - This version is fully backward compatible with 2.1.0
+- **Unit ID Remapping Syntax** - New simplified syntax recommended, but JSON format still supported
 
 ### Known Issues
 - Serial device auto-detection requires `privileged: true` mode

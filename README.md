@@ -174,9 +174,13 @@ The `unit_id_remapping` feature allows you to map incoming unit IDs to different
 - The actual Modbus server has the device on a different unit ID (e.g., 10)
 - You want to virtualize unit IDs for different clients
 
-**Example:** `unit_id_remapping: "{\"1\": 10}"` means:
+**Simple Syntax (Recommended):** `unit_id_remapping: "1<>10"` means:
 - When a client sends a request to unit ID 1, it gets forwarded to unit ID 10 on the server
 - All responses from unit ID 10 appear as if they came from unit ID 1
+
+**Multiple Mappings:** `unit_id_remapping: "1<>10,2<>20,3<>30"` for multiple unit ID mappings
+
+**JSON Syntax (Legacy):** `unit_id_remapping: "{\"1\": 10}"` - still supported for backward compatibility
 
 **Note:** Each device can only have one remapping configuration.
 

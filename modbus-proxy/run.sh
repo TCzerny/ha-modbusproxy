@@ -218,8 +218,24 @@ EOF
     UNIT_ID_REMAPPING=$(bashio::config "modbus_devices[${DEVICE_COUNT}].unit_id_remapping" "" 2>/dev/null || echo "")
     if [ -n "$UNIT_ID_REMAPPING" ] && [ "$UNIT_ID_REMAPPING" != "null" ]; then
         echo "    unit_id_remapping:" >> "$CONFIG_PATH"
-        # Parse the remapping JSON and extract key-value pairs
-        echo "$UNIT_ID_REMAPPING" | jq -r 'to_entries[] | "      " + (.key | tostring) + ": " + (.value | tostring)' >> "$CONFIG_PATH"
+        
+        # Check if it's JSON format (backward compatibility) or simple format
+        if echo "$UNIT_ID_REMAPPING" | jq empty 2>/dev/null; then
+            # JSON format - parse with jq (backward compatibility)
+            echo "$UNIT_ID_REMAPPING" | jq -r 'to_entries[] | "      " + (.key | tostring) + ": " + (.value | tostring)' >> "$CONFIG_PATH"
+        else
+            # Simple format: 1<>10,2<>20,3<>30
+            echo "$UNIT_ID_REMAPPING" | tr ',' '\n' | while IFS='<>' read -r from to; do
+                # Skip empty lines
+                [ -z "$from" ] && continue
+                # Validate that both from and to are numbers
+                if [[ "$from" =~ ^[0-9]+$ ]] && [[ "$to" =~ ^[0-9]+$ ]]; then
+                    echo "      $from: $to" >> "$CONFIG_PATH"
+                else
+                    echo "⚠️ Invalid unit_id_remapping format: $from<>$to (must be numbers)"
+                fi
+            done
+        fi
     fi
     
     # Add listen configuration

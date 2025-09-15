@@ -1,5 +1,5 @@
 name: "Modbus Proxy"
-version: "2.2.0mr7-beta"
+version: "2.2.0-beta"
 slug: "modbus_proxy"
 description: "A powerful multi-device Modbus TCP and RTU proxy (BETA - RTU and RTUoverTCP Support)"
 arch:
@@ -48,6 +48,7 @@ options:
       bind_port: 505
       timeout: 3.0
       connection_time: 0.1
+      unit_id_remapping: "1<>10,2<>20"
 schema:
   log_level: "list(info|warning|error|debug)?"
   auto_detect_device: "bool?"

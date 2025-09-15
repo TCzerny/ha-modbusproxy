@@ -1,7 +1,7 @@
 name: "Modbus Proxy"
-version: "2.2.0-beta"
+version: "2.2.0mr7-beta"
 slug: "modbus_proxy"
-description: "A powerful multi-device Modbus TCP and RTU proxy (BETA - RTU Support)"
+description: "A powerful multi-device Modbus TCP and RTU proxy (BETA - RTU and RTUoverTCP Support)"
 arch:
   - aarch64
   - amd64
@@ -53,7 +53,7 @@ schema:
   auto_detect_device: "bool?"
   modbus_devices:
     - name: "str"
-      protocol: "list(tcp|rtu)"
+      protocol: "list(tcp|rtu|rtutcp)"
       # TCP Modbus parameters
       host: "str?"
       port: "port?"

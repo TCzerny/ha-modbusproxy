@@ -428,7 +428,11 @@ class ModBus(Connection):
             self.modbus_host = url.hostname
             self.modbus_port = url.port
         
-        self.host = bind.hostname
+        # Handle IPv6 support: "0" should bind to all interfaces (IPv4 + IPv6)
+        if bind.hostname == "0":
+            self.host = None  # None binds to all interfaces (IPv4 + IPv6)
+        else:
+            self.host = bind.hostname
         self.port = 502 if bind.port is None else bind.port
         self.timeout = modbus.get("timeout", None)
         self.connection_time = modbus.get("connection_time", 0)

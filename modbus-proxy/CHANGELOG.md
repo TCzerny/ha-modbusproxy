@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.2.2] - 2025-09-19
+
+### Fixed
+- **IPv6 Binding Support** - Fixed proxy only binding to IPv4 when using `bind: 0:port`
+- **Dual-Stack Networking** - Now properly binds to both IPv4 and IPv6 interfaces
+- **Client Connectivity** - Resolves issue where IPv6 clients couldn't connect to proxy
+
+### Technical Improvements
+- **modbus_proxy.py v0.8.3** - Changed bind hostname "0" to None for dual-stack binding
+- **Network Compatibility** - asyncio.start_server now creates both IPv4 and IPv6 sockets
+
 ## [2.2.1-beta] - 2025-09-19
 
 ### Added

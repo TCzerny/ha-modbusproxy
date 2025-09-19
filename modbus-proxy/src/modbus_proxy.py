@@ -17,9 +17,10 @@ import os
 import stat
 from urllib.parse import urlparse
 
-__version__ = "0.8.2"
+__version__ = "0.8.3"
 
 # Changelog:
+# 0.8.3 - Fix IPv6 binding support
 # 0.8.2 - Add RTU(over)TCP, fix RTU issues
 # 0.8.1 - Enhanced logging system with TRACE level, improved RTU support with asyncio serial
 #         - Added custom TRACE logging level for proxy activity overview

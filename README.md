@@ -4,38 +4,36 @@
 
 A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced logging and client tracking. Allows multiple clients to connect to Modbus servers that typically only support a single connection.
 
-## ⚠️ BETA VERSION WARNING
+## ✅ STABLE VERSION
 
-**This is a BETA version (2.2.1-beta) with enhanced protocol support.**
+**This is version 2.2.2 with full protocol support and IPv6 compatibility.**
 
-**⚠️ Important Notes:**
+**✅ Key Features:**
 - **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
-- **Universal Support**: All protocol combinations now supported (TCP ↔ RTU ↔ RTU over TCP)
-- **Fixed TCP Issues**: Resolved connection problems introduced in 2.2.0-beta
+- **Universal Support**: All protocol combinations supported (TCP ↔ RTU ↔ RTU over TCP)
+- **IPv6 Compatibility**: Full dual-stack IPv4 and IPv6 support
 - **Enhanced Debugging**: Detailed protocol transformation logging
 
-**To install Beta version:**
-1. Go to [GitHub Releases](https://github.com/TCzerny/ha-modbusproxy/releases)
-2. Download the `v2.2.1-beta` release
-3. Install as local add-on in Home Assistant
+**Installation:**
+1. Add the repository: `https://github.com/TCzerny/ha-modbusproxy`
+2. Install via Home Assistant Supervisor
+3. Configure your Modbus devices
 
-**To switch back to stable version:**
-1. Remove the beta add-on
-2. Add the repository: `https://github.com/TCzerny/ha-modbusproxy`
-3. Install the stable version
+**Note:** Home Assistant Supervisor automatically installs the latest stable version.
 
-**Note:** The Supervisor automatically installs the latest stable version.
-Beta versions must be installed manually from GitHub Releases.
+## 🆕 What's New in Version 2.2.2
 
-## 🆕 What's New in Version 2.2.1-beta
+**IPv6 & Connectivity:**
+- 🌐 **IPv6 Support**: Fixed dual-stack IPv4/IPv6 binding for all client types
+- 🔗 **Universal Connectivity**: Clients can connect via IPv4 or IPv6 
+- 🔧 **Network Compatibility**: Resolves connection issues with IPv6-enabled Home Assistant instances
 
-**Universal Protocol Support:**
+**Protocol Features (2.2.1):**
 - 🔍 **Auto-Detection**: Client automatically detects TCP vs RTU over TCP from Home Assistant
 - 🔄 **Smart Transformation**: Automatic conversion between all protocol formats (TCP ↔ RTU ↔ RTU over TCP)
-- 🔧 **Fixed TCP Issues**: Resolved connection problems that broke TCP devices in 2.2.0-beta
 - 📊 **Enhanced Debug Logging**: Shows exact protocol transformations (`TCP → RTU Serial`, etc.)
 
-**Previous Features (2.2.0-beta):**
+**Device Support:**
 - 🔌 **RTU Protocol Support**: Connect to Modbus RTU devices via serial ports
 - 📡 **RTU over TCP Support**: Support for RTU over TCP connections
 - ⚙️ **Configurable Serial Parameters**: Baudrate, databits, stopbits, parity

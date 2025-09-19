@@ -335,67 +335,66 @@ class Client(Connection):
     async def _write(self, data):
         # Enhanced logging for client writes (responses)
         self.log.debug(f"[{self.client_ip}:{self.client_port}] → Response: %d bytes", len(data))
-        if self.log.isEnabledFor(logging.DEBUG):
-            if hasattr(self, 'modbus_type') and self.modbus_type == 'tcp':		
-                if len(data) >= 7:		
-                    self._log_modbus_message(data, "sent_to_client")
-                elif len(data) >= 4:
-                    self._log_rtu_message(data, "sent_to_client")
+        if self.log.isEnabledFor(logging.DEBUG) and len(data) >= 7:
+            self._log_modbus_message(data, "sent_to_client")
         self.writer.write(data)
         await self.writer.drain()
         
     async def _read(self):
-        """Read ModBus TCP or RTUoverTCP message from client"""
-		
-        if hasattr(self, 'modbus_type') and self.modbus_type == 'tcp':
-		
-            header = await self.reader.readexactly(6)
-            size = int.from_bytes(header[4:], "big")
-            reply = header + await self.reader.readexactly(size)
+        """Read ModBus message from client with auto-detection"""
+        # Auto-detect TCP vs RTU over TCP format from Home Assistant
+        
+        # Read first 6 bytes to check format
+        first_bytes = await self.reader.readexactly(6)
+        
+        # Check if it's TCP format by looking at Protocol ID (bytes 2-3)
+        protocol_id = int.from_bytes(first_bytes[2:4], "big")
+        
+        if protocol_id == 0:
+            # TCP format detected: [MBAP Header 6 bytes][Unit ID][Function][Data]
+            size = int.from_bytes(first_bytes[4:6], "big")
+            reply = first_bytes + await self.reader.readexactly(size)
             
             self.request_count += 1
-            self.log.debug(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
+            self.log.debug(f"[{self.client_ip}:{self.client_port}] ← TCP Request #{self.request_count}: %d bytes", len(reply))
             
-            # Enhanced debug logging for client requests
             if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 7:
                 self._log_modbus_message(reply, "received_from_client")
             
             return reply
-
+            
         else:
-            # Use appropriate reader based on connection type
-            reader = self.serial_reader if hasattr(self, 'serial_reader') else self.reader
+            # RTU over TCP format detected: [Unit ID][Function][Data][CRC]
+            # first_bytes contains: [Unit ID][Function][4 bytes of data/address]
+            unit_id = first_bytes[0]
+            function_code = first_bytes[1]
             
-            # Read first byte (slave ID)
-            slave_id = await reader.readexactly(1)
+            # Read remaining data based on function code
+            remaining_data = first_bytes[2:]  # Already have 4 bytes
             
-            # Read function code
-            function_code = await reader.readexactly(1)
+            if function_code in [0x01, 0x02, 0x03, 0x04]:  # Read functions
+                # Format: [Unit][Func][Address 2][Count 2][CRC 2] = 8 bytes total
+                # We have 6 bytes, need 2 more (CRC)
+                remaining_data += await self.reader.readexactly(2)
+            elif function_code in [0x05, 0x06]:  # Write single
+                # Format: [Unit][Func][Address 2][Value 2][CRC 2] = 8 bytes total
+                # We have 6 bytes, need 2 more (CRC)
+                remaining_data += await self.reader.readexactly(2)
+            elif function_code in [0x0F, 0x10]:  # Write multiple
+                # We need to read byte count first, then data, then CRC
+                byte_count = remaining_data[2]  # 5th byte overall
+                if len(remaining_data) < 3 + byte_count + 2:  # Need more data
+                    additional_needed = 3 + byte_count + 2 - len(remaining_data)
+                    remaining_data += await self.reader.readexactly(additional_needed)
+            else:
+                # Unknown function, try to read 2 more bytes (CRC)
+                remaining_data += await self.reader.readexactly(2)
             
-            # Read data based on function code
-            data = b''
-            if function_code[0] in [0x01, 0x02, 0x03, 0x04]:  # Read functions
-                # Read address (2 bytes) + count (2 bytes)
-                data = await reader.readexactly(4)
-            elif function_code[0] in [0x05, 0x06]:  # Write single
-                # Read address (2 bytes) + value (2 bytes)
-                data = await reader.readexactly(4)
-            elif function_code[0] in [0x0F, 0x10]:  # Write multiple
-                # Read address (2 bytes) + count (2 bytes) + byte_count + data
-                addr_count = await reader.readexactly(4)
-                byte_count = await reader.readexactly(1)
-                data = addr_count + byte_count + await reader.readexactly(byte_count[0])
+            reply = bytes([unit_id, function_code]) + remaining_data
             
-            # Read CRC (2 bytes)
-            crc = await reader.readexactly(2)
-            
-            # Combine into RTU frame
-            reply = slave_id + function_code + data + crc
-   	   	
             self.request_count += 1
-            self.log.debug(f"[{self.client_ip}:{self.client_port}] ← Request #{self.request_count}: %d bytes", len(reply))
+            self.log.debug(f"[{self.client_ip}:{self.client_port}] ← RTU over TCP Request #{self.request_count}: %d bytes", len(reply))
             
-            # Enhanced debug logging for client requests
             if self.log.isEnabledFor(logging.DEBUG) and len(reply) >= 4:
                 self._log_rtu_message(reply, "received_from_client")
             
@@ -537,47 +536,163 @@ class ModBus(Connection):
         return crc				
 		
     def _transform_request(self, request):
-	
-        if( self.modbus_type == "rtutcp" or self.modbus_type == "rtu"):
-	
-            uid = request[0]
-            new_uid = self.unit_id_remapping.setdefault(uid, uid)
-            if uid != new_uid:
-                request = bytearray(request)
-                request[0] = new_uid
-
-                request = request[0:-2] + self._crc(request[0:-2]).to_bytes(2, byteorder='little')
-				
-                self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
-            return request
-	
-	
-        else:	
-            uid = request[6]
-            new_uid = self.unit_id_remapping.setdefault(uid, uid)
-            if uid != new_uid:
-                request = bytearray(request)
-                request[6] = new_uid
-                self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
-            return request
+        """Transform request from HA to appropriate format for target device"""
+        
+        # Auto-detect input format (TCP or RTU over TCP)
+        is_tcp_input = len(request) >= 6 and int.from_bytes(request[2:4], "big") == 0
+        input_format = "TCP" if is_tcp_input else "RTU over TCP"
+        
+        # Determine target format based on device configuration
+        if self.modbus_type == "rtu":
+            target_format = "RTU Serial"
+        elif self.modbus_type == "rtutcp":
+            target_format = "RTU over TCP"
+        else:
+            target_format = "TCP"
+        
+        if self.modbus_type == "rtutcp" or self.modbus_type == "rtu":
+            # Target device expects RTU format
+            
+            if is_tcp_input:
+                # Convert TCP format to RTU format
+                # TCP: [MBAP Header 6 bytes][Unit ID][Function][Data]
+                # RTU: [Unit ID][Function][Data][CRC 2 bytes]
+                
+                self.log.debug(f"TRANSFORM: {input_format} → {target_format} (TCP → RTU conversion)")
+                
+                if len(request) < 7:
+                    self.log.error("Invalid TCP request length: %d bytes", len(request))
+                    return request
+                    
+                # Extract RTU data from TCP request (skip MBAP header)
+                uid = request[6]  # Unit ID from TCP message
+                rtu_data = request[6:]  # Unit ID + Function + Data
+                
+                # Apply unit ID remapping
+                new_uid = self.unit_id_remapping.setdefault(uid, uid)
+                if uid != new_uid:
+                    rtu_data = bytearray(rtu_data)
+                    rtu_data[0] = new_uid
+                    self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
+                
+                # Calculate and append CRC
+                crc = self._crc(rtu_data)
+                rtu_request = bytes(rtu_data) + crc.to_bytes(2, byteorder='little')
+                
+                return rtu_request
+                
+            else:
+                # Input is already RTU over TCP, just handle unit ID remapping
+                self.log.debug(f"TRANSFORM: {input_format} → {target_format} (RTU passthrough)")
+                
+                uid = request[0]
+                new_uid = self.unit_id_remapping.setdefault(uid, uid)
+                if uid != new_uid:
+                    request = bytearray(request)
+                    request[0] = new_uid
+                    # Recalculate CRC
+                    request = request[0:-2] + self._crc(request[0:-2]).to_bytes(2, byteorder='little')
+                    self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
+                return request
+            
+        else:
+            # Target device expects TCP format
+            
+            if is_tcp_input:
+                # Input is TCP, keep TCP format, only handle unit ID remapping
+                self.log.debug(f"TRANSFORM: {input_format} → {target_format} (TCP passthrough)")
+                
+                uid = request[6]
+                new_uid = self.unit_id_remapping.setdefault(uid, uid)
+                if uid != new_uid:
+                    request = bytearray(request)
+                    request[6] = new_uid
+                    self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
+                return request
+                
+            else:
+                # Convert RTU over TCP to TCP format
+                # RTU: [Unit ID][Function][Data][CRC 2 bytes]
+                # TCP: [MBAP Header 6 bytes][Unit ID][Function][Data]
+                
+                self.log.debug(f"TRANSFORM: {input_format} → {target_format} (RTU → TCP conversion)")
+                
+                if len(request) < 4:
+                    self.log.error("Invalid RTU request length: %d bytes", len(request))
+                    return request
+                    
+                # Extract RTU data (without CRC)
+                rtu_data = request[:-2]  # Remove CRC
+                uid = rtu_data[0]
+                
+                # Apply unit ID remapping
+                new_uid = self.unit_id_remapping.setdefault(uid, uid)
+                if uid != new_uid:
+                    rtu_data = bytearray(rtu_data)
+                    rtu_data[0] = new_uid
+                    self.log.debug("remapping unit ID %s to %s in request", uid, new_uid)
+                
+                # Create TCP request with MBAP header
+                transaction_id = b'\x00\x01'  # Simple transaction ID
+                protocol_id = b'\x00\x00'    # Modbus protocol
+                length = len(rtu_data).to_bytes(2, byteorder='big')
+                
+                tcp_request = transaction_id + protocol_id + length + rtu_data
+                
+                return tcp_request
 
     def _transform_reply(self, reply):
-	
-        if( self.modbus_type == "rtutcp" or self.modbus_type == "rtu"):
-	
-            uid = reply[0]
+        """Transform device reply to format expected by HA"""
+        
+        # Determine source format based on device configuration
+        if self.modbus_type == "rtu":
+            source_format = "RTU Serial"
+        elif self.modbus_type == "rtutcp":
+            source_format = "RTU over TCP"
+        else:
+            source_format = "TCP"
+        
+        # For replies, we always convert to TCP format for HA
+        # (HA expects TCP format responses regardless of what it sent)
+        target_format = "TCP"
+        
+        if self.modbus_type == "rtutcp" or self.modbus_type == "rtu":
+            # Device sent RTU format, convert to TCP for HA
+            # RTU: [Unit ID][Function][Data][CRC 2 bytes]
+            # TCP: [MBAP Header 6 bytes][Unit ID][Function][Data]
+            
+            self.log.debug(f"TRANSFORM REPLY: {source_format} → {target_format} (RTU → TCP conversion)")
+            
+            if len(reply) < 4:
+                self.log.error("Invalid RTU reply length: %d bytes", len(reply))
+                return reply
+                
+            # Extract RTU data (without CRC)
+            rtu_data = reply[:-2]  # Remove CRC
+            uid = rtu_data[0]
+            
+            # Apply inverse unit ID remapping
             inverse_unit_id_map = {v: k for k, v in self.unit_id_remapping.items()}
             new_uid = inverse_unit_id_map.setdefault(uid, uid)
             if uid != new_uid:
-                reply = bytearray(reply)
-                reply[0] = new_uid
-				
-                reply = reply[0:-2] + self._crc(reply[0:-2]).to_bytes(2, byteorder='little')
-				
+                rtu_data = bytearray(rtu_data)
+                rtu_data[0] = new_uid
                 self.log.debug("remapping unit ID %s to %s in reply", uid, new_uid)
-            return reply
-	
-        else:		
+            
+            # Create TCP reply with MBAP header
+            # MBAP: [Transaction ID 2][Protocol ID 2][Length 2][Unit ID + Function + Data]
+            transaction_id = b'\x00\x01'  # Simple transaction ID
+            protocol_id = b'\x00\x00'    # Modbus protocol
+            length = len(rtu_data).to_bytes(2, byteorder='big')
+            
+            tcp_reply = transaction_id + protocol_id + length + rtu_data
+            
+            return tcp_reply
+            
+        else:
+            # Device sent TCP format, keep TCP format, only handle unit ID remapping
+            self.log.debug(f"TRANSFORM REPLY: {source_format} → {target_format} (TCP passthrough)")
+            
             uid = reply[6]
             inverse_unit_id_map = {v: k for k, v in self.unit_id_remapping.items()}
             new_uid = inverse_unit_id_map.setdefault(uid, uid)

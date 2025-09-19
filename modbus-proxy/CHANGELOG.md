@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.2.1-beta] - 2025-09-19
+
+### Added
+- **Protocol Auto-Detection** - Client automatically detects TCP vs RTU over TCP from Home Assistant
+- **Smart Message Transformation** - Automatic conversion between TCP, RTU, and RTU over TCP formats
+- **Enhanced Debug Logging** - Shows protocol transformation details (`TCP → RTU Serial`, `RTU over TCP → TCP`, etc.)
+
+### Fixed
+- **TCP Connection Issues** - Fixed Client class protocol detection that broke TCP connections
+- **Message Format Handling** - Proper MBAP header and CRC handling for all protocol combinations
+- **Protocol Passthrough** - Correct handling when input and output protocols match
+
+### Enhanced
+- **Universal Protocol Support** - All combinations work: HA (TCP/RTU over TCP) ↔ Proxy ↔ Device (TCP/RTU/RTU over TCP)
+- **Transformation Logging** - Clear debug output showing exactly what conversions are performed
+
+### Technical Improvements
+- **modbus_proxy.py v0.8.2** - Fixed Client._read() auto-detection and _transform_request/_transform_reply functions
+- **Protocol Detection Logic** - Uses Protocol ID field (bytes 2-3) to distinguish TCP from RTU over TCP
+- **CRC Calculation** - Proper CRC handling for RTU format conversions
+
+### Acknowledgments
+- **netadair** - Contributed RTU over TCP improvements and RTU issue fixes
+
 ## [2.2.0-beta] - 2025-09-15
 
 ### Added

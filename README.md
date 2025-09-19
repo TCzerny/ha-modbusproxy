@@ -6,17 +6,17 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 
 ## ⚠️ BETA VERSION WARNING
 
-**This is a BETA version (2.2.0-beta) with experimental RTU/Serial support.**
+**This is a BETA version (2.2.1-beta) with enhanced protocol support.**
 
 **⚠️ Important Notes:**
-- **Experimental Features**: RTU/Serial support is still being tested
-- **Backup Recommended**: Backup your current configuration before testing
-- **Fallback Available**: You can always switch back to stable version 2.1.0
-- **Testing Phase**: This version is for testing RTU devices only
+- **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
+- **Universal Support**: All protocol combinations now supported (TCP ↔ RTU ↔ RTU over TCP)
+- **Fixed TCP Issues**: Resolved connection problems introduced in 2.2.0-beta
+- **Enhanced Debugging**: Detailed protocol transformation logging
 
 **To install Beta version:**
 1. Go to [GitHub Releases](https://github.com/TCzerny/ha-modbusproxy/releases)
-2. Download the `v2.2.0-beta` release
+2. Download the `v2.2.1-beta` release
 3. Install as local add-on in Home Assistant
 
 **To switch back to stable version:**
@@ -27,13 +27,18 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 **Note:** The Supervisor automatically installs the latest stable version.
 Beta versions must be installed manually from GitHub Releases.
 
-## 🆕 What's New in Version 2.2.0
+## 🆕 What's New in Version 2.2.1-beta
 
-**RTU/Serial Modbus Support:**
+**Universal Protocol Support:**
+- 🔍 **Auto-Detection**: Client automatically detects TCP vs RTU over TCP from Home Assistant
+- 🔄 **Smart Transformation**: Automatic conversion between all protocol formats (TCP ↔ RTU ↔ RTU over TCP)
+- 🔧 **Fixed TCP Issues**: Resolved connection problems that broke TCP devices in 2.2.0-beta
+- 📊 **Enhanced Debug Logging**: Shows exact protocol transformations (`TCP → RTU Serial`, etc.)
+
+**Previous Features (2.2.0-beta):**
 - 🔌 **RTU Protocol Support**: Connect to Modbus RTU devices via serial ports
-- 📡 **Serial Communication**: Support for USB-to-Serial adapters and RS485 devices
+- 📡 **RTU over TCP Support**: Support for RTU over TCP connections
 - ⚙️ **Configurable Serial Parameters**: Baudrate, databits, stopbits, parity
-- 🔍 **Enhanced INFO Messages**: Clear Client ↔ Proxy ↔ Device tracking
 - 🔍 **Auto-Detection**: Automatically detect serial devices for plug & play setup
 
 **Enhanced Logging & Debug Features:**
@@ -44,18 +49,26 @@ Beta versions must be installed manually from GitHub Releases.
 - 🔍 **Enhanced INFO Messages**: Clear Client ↔ Proxy ↔ Device tracking
 - 📈 **Request Counting**: Track number of requests per client connection
 
-**Example Debug Output (TCP):**
+**Example Debug Output (TCP → TCP):**
 ```
-2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): received request from 192.168.1.50:45231 - 12 bytes
-2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): received_from_client: TxID=1, Unit=1, FC=03
+2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): ← TCP Request #1: 12 bytes
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.100:502): TRANSFORM: TCP → TCP (TCP passthrough)
 2024-12-19 10:30:16 DEBUG ModBus(192.168.1.100:502): Registers: [12345, 67890, 11111, 22222]
 ```
 
-**Example Debug Output (RTU):**
+**Example Debug Output (TCP → RTU Serial):**
 ```
-2024-12-19 10:30:16 DEBUG ModBus(RTU:/dev/ttyUSB0): received RTU 8 bytes: b'010300010001C40A'
-2024-12-19 10:30:16 DEBUG ModBus(RTU:/dev/ttyUSB0): received RTU: Slave=1, FC=03
+2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): ← TCP Request #1: 12 bytes
+2024-12-19 10:30:16 DEBUG ModBus(RTU:/dev/ttyUSB0): TRANSFORM: TCP → RTU Serial (TCP → RTU conversion)
+2024-12-19 10:30:16 DEBUG ModBus(RTU:/dev/ttyUSB0): TRANSFORM REPLY: RTU Serial → TCP (RTU → TCP conversion)
 2024-12-19 10:30:16 DEBUG ModBus(RTU:/dev/ttyUSB0): RTU Registers: [12345]
+```
+
+**Example Debug Output (RTU over TCP → RTU over TCP):**
+```
+2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): ← RTU over TCP Request #1: 8 bytes
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.200:502): TRANSFORM: RTU over TCP → RTU over TCP (RTU passthrough)
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.200:502): TRANSFORM REPLY: RTU over TCP → TCP (RTU → TCP conversion)
 ```
 
 ## About
@@ -118,7 +131,7 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | No | `Device X` | Friendly name for the device |
-| `protocol` | No | Auto-detected | Protocol type: `tcp` or `rtu` |
+| `protocol` | No | Auto-detected | Protocol type: `tcp`, `rtu`, or `rtutcp` |
 | `device` | No* | - | Serial device path (e.g., `/dev/ttyUSB0`) |
 | `baudrate` | No | `9600` | Serial baudrate |
 | `databits` | No | `8` | Number of data bits |
@@ -205,7 +218,7 @@ modbus_devices:
 log_level: "info"
 ```
 
-#### Mixed TCP and RTU Devices
+#### Mixed TCP, RTU, and RTU over TCP Devices
 ```yaml
 modbus_devices:
   - name: "TCP Solar Inverter"
@@ -223,13 +236,20 @@ modbus_devices:
     bind_port: 503
     timeout: 5.0
     connection_time: 1.0
+  - name: "RTU over TCP Gateway"
+    host: "192.168.1.200"
+    port: 502
+    protocol: "rtutcp"
+    bind_port: 504
+    timeout: 5.0
+    connection_time: 1.0
   - name: "RTU Temperature Sensor"
     device: "/dev/ttyACM0"
     baudrate: 115200
     databits: 8
     stopbits: 1
     parity: "E"
-    bind_port: 504
+    bind_port: 505
     timeout: 3.0
     connection_time: 0.5
 log_level: "debug"

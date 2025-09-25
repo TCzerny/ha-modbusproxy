@@ -1,0 +1,4 @@
+build_from:
+  amd64:   homeassistant/amd64-base-python
+  aarch64: homeassistant/aarch64-base-python
+  armv7:   homeassistant/armv7-base-python

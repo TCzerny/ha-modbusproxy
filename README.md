@@ -1,12 +1,14 @@
 # Home Assistant Add-on: Modbus Proxy
 
-[![License][license-shield]](LICENSE)
+![Modbus Proxy Logo](modbus-proxy/logo.png)
+
+[![License: Apache 2.0][license-shield]][license-url]
 
 A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced logging and client tracking. Allows multiple clients to connect to Modbus servers that typically only support a single connection.
 
 ## ✅ STABLE VERSION
 
-**This is version 2.2.2 with full protocol support and IPv6 compatibility.**
+**This is version 2.2.3 with enhanced RTU over TCP support and optimized format detection.**
 
 **✅ Key Features:**
 - **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
@@ -20,6 +22,19 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 3. Configure your Modbus devices
 
 **Note:** Home Assistant Supervisor automatically installs the latest stable version.
+
+## 🆕 What's New in Version 2.2.3
+
+**RTU over TCP Communication Fix:**
+- 🔧 **Fixed RTU over TCP Issue**: Resolved communication problem where RTU over TCP → RTU over TCP didn't work
+- 🎯 **Smart Format Detection**: Eliminated duplicate format detection for better performance
+- 🔄 **Intelligent Response Handling**: Now properly detects client format and responds accordingly
+- ⚡ **Optimized Processing**: Reduced redundant format detection calls
+
+**Enhanced Protocol Support:**
+- 📡 **Complete RTU over TCP Support**: All RTU over TCP communication scenarios now work correctly
+- 🔍 **Consistent Format Handling**: Both request and reply transformations use unified format detection
+- 🛡️ **Backward Compatibility**: All existing functionality remains unchanged
 
 ## 🆕 What's New in Version 2.2.2
 
@@ -66,7 +81,8 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 ```
 2024-12-19 10:30:16 DEBUG Client(192.168.1.50:45231): ← RTU over TCP Request #1: 8 bytes
 2024-12-19 10:30:16 DEBUG ModBus(192.168.1.200:502): TRANSFORM: RTU over TCP → RTU over TCP (RTU passthrough)
-2024-12-19 10:30:16 DEBUG ModBus(192.168.1.200:502): TRANSFORM REPLY: RTU over TCP → TCP (RTU → TCP conversion)
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.200:502): TRANSFORM REPLY: RTU over TCP → RTU over TCP (RTU passthrough)
+2024-12-19 10:30:16 DEBUG ModBus(192.168.1.200:502): RTU Registers: [12345, 67890]
 ```
 
 ## About
@@ -494,3 +510,7 @@ This add-on is based on:
 See the [LICENSE](LICENSE) file for details.
 
 ---
+
+<!-- Badges -->
+[license-shield]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
+[license-url]: https://github.com/TCzerny/ha-modbusproxy/blob/main/LICENSE

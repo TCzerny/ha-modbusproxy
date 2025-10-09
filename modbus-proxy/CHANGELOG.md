@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.2.3] - 2025-10-09
+
+### Fixed
+- **RTU over TCP Communication Issue** - Fixed assumption that HA always expects TCP format responses
+- **Format Detection Optimization** - Eliminated duplicate format detection processing
+- **Response Format Handling** - Now properly supports RTU over TCP → RTU over TCP communication
+
+### Enhanced
+- **Intelligent Format Detection** - Client requests are now properly detected as TCP or RTU over TCP
+- **Smart Response Transformation** - `_transform_reply` now supports both TCP and RTU over TCP response formats
+- **Consistent Format Handling** - Both request and reply transformations use the same format detection logic
+
+### Technical Improvements
+- **modbus_proxy.py v0.8.4** - Enhanced format detection and transformation logic
+- **Performance Optimization** - Reduced redundant format detection calls
+- **Backward Compatibility** - All existing functionality remains unchanged
+
 ## [2.2.2] - 2025-09-19
 
 ### Fixed

@@ -1,5 +1,5 @@
 name: "Modbus Proxy"
-version: "2.2.2"
+version: "2.2.4"
 slug: "modbus_proxy"
 description: "A powerful multi-device Modbus TCP and RTU proxy (BETA - RTU and RTUoverTCP Support)"
 arch:
@@ -14,10 +14,54 @@ host_network: true
 privileged:
   - SYS_RAWIO
 devices:
-  - "/dev/ttyUSB0"
-  - "/dev/ttyUSB1"
-  - "/dev/ttyACM0"
-  - "/dev/serial/by-id/"
+  # USB-Seriell-Adapter (CH340, CP210x, FTDI, Prolific, etc.)
+  - /dev/ttyUSB0
+  - /dev/ttyUSB1
+  - /dev/ttyUSB2
+  - /dev/ttyUSB3
+  - /dev/ttyUSB4
+  - /dev/ttyUSB5
+  - /dev/ttyUSB6
+  - /dev/ttyUSB7
+  - /dev/ttyUSB8
+  - /dev/ttyUSB9
+
+  # ACM-Geräte (CDC-ACM Treiber, oft bei CH340/CP210x)
+  - /dev/ttyACM0
+  - /dev/ttyACM1
+  - /dev/ttyACM2
+  - /dev/ttyACM3
+  - /dev/ttyACM4
+
+  # Onboard-UARTs (z. B. Raspberry Pi GPIO)
+  - /dev/ttyAMA0
+  - /dev/ttyAMA1
+  - /dev/ttyAMA2
+  - /dev/ttyAMA3
+  - /dev/ttyAMA4
+  - /dev/ttyAMA5
+
+  # Klassische serielle Ports (falls vorhanden)
+  - /dev/ttyS0
+  - /dev/ttyS1
+  - /dev/ttyS2
+  - /dev/ttyS3
+  - /dev/ttyS4
+  - /dev/ttyS5
+  - /dev/ttyS6
+  - /dev/ttyS7
+
+  # Symlinks über udev (stabiler bei mehreren Adaptern)
+  # Hier musst du exemplarisch die gängigsten Chipsätze aufnehmen
+  - /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0        # CH340
+  - /dev/serial/by-id/usb-1a86_USB2.0-Serial-if00-port0     # CH341
+  - /dev/serial/by-id/usb-FTDI_USB_Serial_Converter-if00-port0
+  - /dev/serial/by-id/usb-FTDI_FT232R_USB_UART-if00-port0   # FT232
+  - /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller-if00-port0
+  - /dev/serial/by-id/usb-Silicon_Labs_CP2104_USB_to_UART_Bridge_Controller-if00-port0
+  - /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller-if00-port0
+  - /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_D-if00-port0  # PL2303
+  
 options:
   log_level: "info"
   auto_detect_device: true

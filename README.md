@@ -8,7 +8,7 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 
 ## ✅ STABLE VERSION
 
-**This is version 2.2.3 with enhanced RTU over TCP support and optimized format detection.**
+**This is version 2.2.4 with comprehensive USB-to-RTU device support and enhanced serial communication.**
 
 **✅ Key Features:**
 - **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
@@ -22,6 +22,23 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 3. Configure your Modbus devices
 
 **Note:** Home Assistant Supervisor automatically installs the latest stable version.
+
+## 🆕 What's New in Version 2.2.4
+
+**Enhanced USB-to-RTU Device Support:**
+- 🔌 **Comprehensive Device Coverage**: Added support for all major USB-to-Serial chipsets
+- 📡 **Extended Serial Ports**: Support for ttyAMA3-5, ttyS4-7 for newer hardware
+- 🛡️ **Stable Device Identifiers**: Enhanced by-id symlink support for reliable device mapping
+- ⚡ **Plug & Play**: Automatic detection of CH340, CH341, FTDI, Silicon Labs, Prolific chipsets
+- 🔧 **Hot-Swappable**: Better support for multiple USB-Serial adapters
+
+**Supported USB-to-RTU Chipsets:**
+- ✅ **CH340/CH341** - Most common USB-Serial adapters
+- ✅ **FTDI FT232/FT2232** - Professional-grade adapters
+- ✅ **Silicon Labs CP2102/CP2104** - High-quality converters
+- ✅ **Prolific PL2303** - Widely used adapters
+- ✅ **Onboard UARTs** - Raspberry Pi GPIO, ttyAMA0-5
+- ✅ **Classic Serial** - ttyS0-7 for legacy hardware
 
 ## 🆕 What's New in Version 2.2.3
 
@@ -180,10 +197,12 @@ modbus_devices:
 ```
 
 **Auto-Detection Priority:**
-1. `/dev/serial/by-id/*` - Stable device identifiers
-2. `/dev/ttyUSB0` - Common USB-to-Serial adapter
-3. `/dev/ttyACM0` - Arduino/ACM devices
-4. Any `/dev/ttyUSB*` or `/dev/ttyACM*` device
+1. `/dev/serial/by-id/*` - Stable device identifiers (CH340, CH341, FTDI, Silicon Labs, Prolific)
+2. `/dev/ttyUSB0-9` - USB-to-Serial adapters (CH340, FTDI, etc.)
+3. `/dev/ttyACM0-4` - CDC-ACM devices (Arduino, CH340/CP210x)
+4. `/dev/ttyAMA0-5` - Onboard UARTs (Raspberry Pi GPIO)
+5. `/dev/ttyS0-7` - Classic serial ports
+6. Any `/dev/ttyUSB*`, `/dev/ttyACM*`, `/dev/ttyAMA*`, or `/dev/ttyS*` device
 
 **Benefits:**
 - 🔌 **Plug & Play**: No manual device path configuration
@@ -421,11 +440,24 @@ log_level: "debug"
 
 **Important Notes for RTU Devices:**
 - 🔌 **Serial Port Access**: The add-on needs access to serial ports on the host
-- 📁 **Device Paths**: Common paths are `/dev/ttyUSB0`, `/dev/ttyACM0`, `/dev/ttyS0`
+- 📁 **Device Paths**: Comprehensive support for all common paths:
+  - `/dev/ttyUSB0-9` - USB-to-Serial adapters
+  - `/dev/ttyACM0-4` - CDC-ACM devices
+  - `/dev/ttyAMA0-5` - Onboard UARTs (Raspberry Pi)
+  - `/dev/ttyS0-7` - Classic serial ports
+  - `/dev/serial/by-id/*` - Stable device identifiers
 - 🔧 **Permissions**: Automatic permission handling with udev integration
 - 📊 **Baudrate**: Must match your device's communication speed
 - 🔄 **Parity**: Common values are `N` (None), `E` (Even), `O` (Odd)
 - ⚡ **Asyncio Support**: Non-blocking serial communication for better performance
+
+**Supported USB-to-RTU Chipsets:**
+- ✅ **CH340/CH341** - Most common USB-Serial adapters (1a86)
+- ✅ **FTDI FT232/FT2232** - Professional-grade adapters
+- ✅ **Silicon Labs CP2102/CP2104** - High-quality converters
+- ✅ **Prolific PL2303** - Widely used adapters
+- ✅ **Onboard UARTs** - Raspberry Pi GPIO, ttyAMA0-5
+- ✅ **Classic Serial** - ttyS0-7 for legacy hardware
 
 **Enhanced Features:**
 - 🔍 **Auto-Detection**: Automatically find and configure serial devices

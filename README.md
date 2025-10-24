@@ -8,7 +8,7 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 
 ## ✅ STABLE VERSION
 
-**This is version 2.2.4 with comprehensive USB-to-RTU device support and enhanced serial communication.**
+**This is version 2.2.5 with comprehensive USB-to-RTU device support and full serial device access.**
 
 **✅ Key Features:**
 - **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
@@ -22,6 +22,12 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 3. Configure your Modbus devices
 
 **Note:** Home Assistant Supervisor automatically installs the latest stable version.
+
+## 🆕 What's New in Version 2.2.5
+
+**Critical Serial Device Access Fix:**
+- 🔓 **UART & udev Support** - Added `uart: true` and `udev: true` to resolve FileNotFoundError for `/dev/serial/by-id/*` symlinks
+- 🔍 **Startup Diagnostics** - Now shows all available serial devices at startup for easier troubleshooting
 
 ## 🆕 What's New in Version 2.2.4
 
@@ -440,13 +446,14 @@ log_level: "debug"
 
 **Important Notes for RTU Devices:**
 - 🔌 **Serial Port Access**: The add-on needs access to serial ports on the host
+- 🔓 **UART & udev Support**: The add-on uses `uart: true` and `udev: true` for proper serial device access (following [HA best practices](https://developers.home-assistant.io/docs/add-ons/configuration))
 - 📁 **Device Paths**: Comprehensive support for all common paths:
   - `/dev/ttyUSB0-9` - USB-to-Serial adapters
   - `/dev/ttyACM0-4` - CDC-ACM devices
   - `/dev/ttyAMA0-5` - Onboard UARTs (Raspberry Pi)
   - `/dev/ttyS0-7` - Classic serial ports
-  - `/dev/serial/by-id/*` - Stable device identifiers
-- 🔧 **Permissions**: Automatic permission handling with udev integration
+  - `/dev/serial/by-id/*` - Stable device identifiers (recommended!)
+- 🔧 **Permissions**: Automatic permission handling with UART and udev integration
 - 📊 **Baudrate**: Must match your device's communication speed
 - 🔄 **Parity**: Common values are `N` (None), `E` (Even), `O` (Odd)
 - ⚡ **Asyncio Support**: Non-blocking serial communication for better performance
@@ -468,10 +475,21 @@ log_level: "debug"
 
 **Troubleshooting RTU Connections:**
 - Check if the serial device exists: `ls -la /dev/tty*`
+- Check stable device identifiers: `ls -la /dev/serial/by-id/`
 - Verify device permissions: `ls -la /dev/ttyUSB0`
 - Test serial communication: `stty -F /dev/ttyUSB0 9600`
 - Check for device conflicts: `dmesg | grep tty`
 - Monitor auto-detection: Check logs for "Auto-detecting serial device"
+- Review device list in logs: The add-on shows all available devices at startup
+
+**Common Issue: FileNotFoundError for Serial Devices**
+
+If you get a `FileNotFoundError` when trying to access serial devices:
+
+1. **Check Add-on Logs**: The add-on lists all available devices at startup
+2. **Use Stable Paths**: Prefer `/dev/serial/by-id/*` over `/dev/ttyUSB*` for reliability
+3. **Verify Device Exists**: On the host, run `ls -la /dev/serial/by-id/` to see available devices
+
 
 ### Technical Improvements
 
@@ -501,6 +519,20 @@ This add-on uses `host_network: true` which means:
 - ✅ Optimal performance with minimal network overhead
 - ⚠️ Ports must be unique across all services on your host
 
+### Security Note
+
+This add-on uses `uart: true` and `udev: true` to enable access to all serial devices including symlinks in `/dev/serial/by-id/`, following [Home Assistant Add-on security best practices](https://developers.home-assistant.io/docs/add-ons/configuration). 
+
+**What `uart: true` and `udev: true` mean:**
+- ✅ Access to UART/serial devices in `/dev/*`
+- ✅ Access to udev system for dynamic device detection
+- ✅ Proper permissions following Home Assistant security guidelines
+
+**Is this safe?**
+- ✅ Uses recommended HA add-on permissions for serial device access
+- ✅ The add-on only accesses serial devices for Modbus communication
+- ✅ No unnecessary system access beyond serial devices
+- ✅ Open-source code - you can review all operations
 
 ## Support
 

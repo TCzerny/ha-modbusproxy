@@ -6,6 +6,25 @@ LOG_LEVEL=$(bashio::config 'log_level' 'info')
 AUTO_DETECT_DEVICE=$(bashio::config 'auto_detect_device' 'false')
 HAS_RTU_DEVICES="false"
 
+# Debug: List all available serial devices
+echo "🔍 Checking available serial devices..."
+echo "================================================"
+if [ -d "/dev/serial/by-id" ]; then
+    echo "📁 /dev/serial/by-id/ devices:"
+    ls -la /dev/serial/by-id/ 2>/dev/null || echo "  (none found or not accessible)"
+fi
+echo ""
+echo "📁 /dev/ttyUSB* devices:"
+ls -la /dev/ttyUSB* 2>/dev/null || echo "  (none found)"
+echo ""
+echo "📁 /dev/ttyACM* devices:"
+ls -la /dev/ttyACM* 2>/dev/null || echo "  (none found)"
+echo ""
+echo "📁 /dev/ttyAMA* devices:"
+ls -la /dev/ttyAMA* 2>/dev/null || echo "  (none found)"
+echo "================================================"
+echo ""
+
 # Auto-detect serial device function
 autodetect_serial_device() {
     echo "🔍 Auto-detecting serial device..."

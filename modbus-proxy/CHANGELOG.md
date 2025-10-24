@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.2.5] - 2025-01-15
+
+### Fixed
+- **Serial Device Access** - Added `uart: true` and `udev: true` which should solve the FileNotFoundError when accessing `/dev/serial/by-id/*` symlinks
+- **Device Mounting** - Fixed critical issue where symlinked devices couldn't be accessed even when listed in config
+- **UART Support** - Proper UART device access following Home Assistant Add-on best practices
+
+### Added
+- **Device List at Startup** - Add-on now shows all available serial devices in logs for easier troubleshooting
+- **Enhanced Diagnostics** - Lists /dev/serial/by-id/, /dev/ttyUSB*, /dev/ttyACM*, /dev/ttyAMA* at startup
+- **UART & udev Support** - Enabled proper serial device access without requiring full_access
+
+
+## [2.2.4] - 2025-01-14
+
+### Added
+- **Enhanced USB-to-RTU Device Support** - Comprehensive support for all major USB-to-Serial chipsets
+- **Extended Serial Port Support** - Added support for ttyAMA3-5, ttyS4-7 for newer hardware
+- **Stable Device Identifiers** - Enhanced by-id symlink support for reliable device mapping
+- **Plug & Play Detection** - Automatic detection of CH340, CH341, FTDI, Silicon Labs, Prolific chipsets
+- **Hot-Swappable Support** - Better support for multiple USB-Serial adapters
+
+### Enhanced
+- **USB-to-RTU Chipsets Coverage** - Full support for:
+  - CH340/CH341 - Most common USB-Serial adapters
+  - FTDI FT232/FT2232 - Professional-grade adapters
+  - Silicon Labs CP2102/CP2104 - High-quality converters
+  - Prolific PL2303 - Widely used adapters
+  - Onboard UARTs - Raspberry Pi GPIO, ttyAMA0-5
+  - Classic Serial - ttyS0-7 for legacy hardware
+
+### Technical Improvements
+- **Device Detection Priority** - Improved auto-detection with stable device identifiers
+- **Enhanced Serial Communication** - Better support for multiple USB-Serial adapters
+- **Improved Device Mapping** - More reliable device identification and configuration
+
 ## [2.2.3] - 2025-10-09
 
 ### Fixed

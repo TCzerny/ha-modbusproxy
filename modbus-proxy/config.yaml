@@ -1,5 +1,5 @@
 name: "Modbus Proxy"
-version: "2.2.4"
+version: "2.2.5"
 slug: "modbus_proxy"
 description: "A powerful multi-device Modbus TCP and RTU proxy (BETA - RTU and RTUoverTCP Support)"
 arch:
@@ -11,8 +11,8 @@ url: "https://github.com/TCzerny/ha-modbusproxy"
 startup: services
 init: false
 host_network: true
-privileged:
-  - SYS_RAWIO
+uart: true
+udev: true
 devices:
   # USB-Seriell-Adapter (CH340, CP210x, FTDI, Prolific, etc.)
   - /dev/ttyUSB0

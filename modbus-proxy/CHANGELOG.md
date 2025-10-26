@@ -1,9 +1,15 @@
 # Changelog
 
-## [2.2.5] - 2025-01-15
+## [2.2.6] - 2025-10-26
 
 ### Fixed
-- **Serial Device Access** - Added `uart: true` and `udev: true` which should solve the FileNotFoundError when accessing `/dev/serial/by-id/*` symlinks
+- **absolute/relative Path issue** - Fixed an issue in `modbus_proxy.py` to resolve FileNotFoundError error for `/dev/serial/by-id/*` 
+
+
+## [2.2.5] - 2025-10-24
+
+### Fixed
+- **Serial Device Access** - Added `uart: true` and `udev: true` to allow acces to `/dev/serial/by-id/*` symlinks
 - **Device Mounting** - Fixed critical issue where symlinked devices couldn't be accessed even when listed in config
 - **UART Support** - Proper UART device access following Home Assistant Add-on best practices
 
@@ -13,7 +19,7 @@
 - **UART & udev Support** - Enabled proper serial device access without requiring full_access
 
 
-## [2.2.4] - 2025-01-14
+## [2.2.4] - 2025-01-22
 
 ### Added
 - **Enhanced USB-to-RTU Device Support** - Comprehensive support for all major USB-to-Serial chipsets

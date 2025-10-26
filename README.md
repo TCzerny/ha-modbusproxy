@@ -8,7 +8,7 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 
 ## ✅ STABLE VERSION
 
-**This is version 2.2.5 with comprehensive USB-to-RTU device support and full serial device access.**
+**This is version 2.2.6 with comprehensive TCP-to-RTU device support and full serial device access.**
 
 **✅ Key Features:**
 - **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
@@ -22,6 +22,12 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 3. Configure your Modbus devices
 
 **Note:** Home Assistant Supervisor automatically installs the latest stable version.
+
+## 🆕 What's New in Version 2.2.6
+
+**Critical Serial Device Access Fix:**
+- 🔓 **absolute/relative Path issue fixed** - Fixed an issue in `modbus_proxy.py` to resolve FileNotFoundError error for `/dev/serial/by-id/*` 
+
 
 ## 🆕 What's New in Version 2.2.5
 

@@ -17,9 +17,10 @@ import os
 import stat
 from urllib.parse import urlparse
 
-__version__ = "0.8.4"
+__version__ = "0.8.5"
 
 # Changelog:
+# 0.8.5 - Normalize RTU device path: ensure absolute path and resolve symlinks 
 # 0.8.4 - Fix RTU over TCP communication issue, improve format detection
 #         - Fixed assumption that HA always expects TCP format responses
 #         - Added intelligent format detection for client requests (TCP vs RTU over TCP)
@@ -417,9 +418,21 @@ class ModBus(Connection):
         # Determine if it's RTU or TCP based on URL scheme
         if url.scheme == "rtu":
             self.modbus_type = "rtu"
-            device_name = url.path.lstrip('/')  # Remove leading slash
+            # Use the raw path from URL; ensure it is absolute
+            raw_path = url.path or ""
+            # If URL gives an empty path (unlikely), allow fallback from hostname
+            if not raw_path and url.hostname:
+                raw_path = url.hostname
+            # Ensure leading slash
+            if not raw_path.startswith("/"):
+                raw_path = "/" + raw_path
+            # Normalize and resolve symlinks if present
+            device_path = os.path.abspath(os.path.realpath(raw_path))
+            # Keep a user-friendly name for logs (basename)
+            device_name = os.path.basename(device_path)
             super().__init__(f"ModBus(RTU:{device_name})", None, None)
-            self.device = device_name
+            self.device = device_path
+            
             self.baudrate = modbus.get("baudrate", 9600)
             self.databits = modbus.get("databits", 8)
             self.stopbits = modbus.get("stopbits", 1)

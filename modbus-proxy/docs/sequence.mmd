@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant HA as Home Assistant (Modbus TCP Client)
+    participant Proxy as modbus-proxy (asyncio server)
+    participant Device as Modbus Device (TCP / RTU over TCP / RTU Serial)
+
+    HA->>Proxy: TCP or RTU-over-TCP request
+    activate Proxy
+    Note right of Proxy: handle_client -> Client.read() (auto-detect)
+    Proxy->>Proxy: Client._read() (detect TCP/RTU-over-TCP)
+    Proxy->>Proxy: _transform_request(request, client_format)
+    Note right of Proxy: ModBus._transform_request (remap unit id, add/remove CRC, MBAP header)
+    Proxy->>Device: send transformed request (TCP or RTU)
+    activate Device
+    Device-->>Proxy: device reply
+    deactivate Device
+    Proxy->>Proxy: _transform_reply(reply, client_format)
+    Proxy->>HA: reply (in requested format)
+    deactivate Proxy

@@ -1,0 +1,22 @@
+%% Mermaid diagram for modbus-proxy architecture
+graph LR
+    HA["Home Assistant<br/> (Modbus TCP Client)"]
+    Proxy["modbus-proxy<br/> (asyncio server)"]
+    subgraph ProxyInternals
+      ClientComp["Client<br/> (reader/writer)"]
+      ModBusComp["ModBus bridge<br/> (connection to device)"]
+      Transformer[_transform_request/_transform_reply]
+      Logger[Logging & Debug Parsers]
+    end
+    DeviceTCP["Modbus Device<br/> (TCP)"]
+    DeviceRTUTCP["Modbus Device<br/> (RTU over TCP)"]
+    DeviceRTU["Modbus Device<br/> (RTU serial)"]
+
+    HA -->|TCP / RTU-over-TCP| ClientComp
+    ClientComp -->|parsed request| Transformer
+    Transformer -->|converted request| ModBusComp
+    ModBusComp -->|connect/write/read| DeviceTCP
+    ModBusComp -->|connect/write/read| DeviceRTUTCP
+    ModBusComp -->|serial write/read| DeviceRTU
+    ModBusComp --> Transformer
+    Proxy --> Logger

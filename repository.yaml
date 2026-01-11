@@ -1,3 +1,3 @@
 name: "Modbus Proxy"
-url: "https://github.com/TCzerny/ha-modbusproxy"
-maintainer: "TCzerny <support@tczerny.de>"
+url: "https://github.com/mspieth/ha-modbusproxy"
+maintainer: "Mark Spieth <mspieth@github.com>"

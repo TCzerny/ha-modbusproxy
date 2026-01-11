@@ -17,7 +17,7 @@ import os
 import stat
 from urllib.parse import urlparse
 
-__version__ = "0.8.5"
+__version__ = "2.3.0"
 
 # Changelog:
 # 0.8.5 - Normalize RTU device path: ensure absolute path and resolve symlinks 

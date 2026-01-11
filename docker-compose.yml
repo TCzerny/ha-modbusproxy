@@ -10,7 +10,7 @@ services:
       # Dein Add-on Repo direkt ins addons_local mounten
       - ./custom_components/modbus_proxy:/config/addons_local/modbus_proxy
     environment:
-      - TZ=Europe/Berlin
+      - TZ=Australia/Melbourne
     restart: unless-stopped
     network_mode: host
     privileged: true

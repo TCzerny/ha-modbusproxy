@@ -8,20 +8,24 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 
 ## ✅ STABLE VERSION
 
-**This is version 2.2.6 with comprehensive TCP-to-RTU device support and full serial device access.**
+**This is version 2.3.0 with comprehensive TCP-to-RTU/UDP device support and full serial device access.**
 
 **✅ Key Features:**
 - **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
-- **Universal Support**: All protocol combinations supported (TCP ↔ RTU ↔ RTU over TCP)
+- **Universal Support**: All protocol combinations supported (TCP ↔ RTU ↔ RTU over TCP ↔ UDP)
 - **IPv6 Compatibility**: Full dual-stack IPv4 and IPv6 support
 - **Enhanced Debugging**: Detailed protocol transformation logging
 
 **Installation:**
-1. Add the repository: `https://github.com/TCzerny/ha-modbusproxy`
+1. Add the repository: `https://github.com/mspieth/ha-modbusproxy`
 2. Install via Home Assistant Supervisor
 3. Configure your Modbus devices
 
 **Note:** Home Assistant Supervisor automatically installs the latest stable version.
+
+## 🆕 What's New in Version 2.3.0
+
+- UDP Support for wifi gateway dongles
 
 ## 🆕 What's New in Version 2.2.6
 

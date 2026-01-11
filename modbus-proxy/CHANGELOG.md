@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.3.0] - 2026-01-04
+
+### Added
+- **UDP device support**
+
 ## [2.2.6] - 2025-10-26
 
 ### Fixed

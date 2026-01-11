@@ -98,11 +98,17 @@ schema:
   auto_detect_device: "bool?"
   modbus_devices:
     - name: "str"
-      protocol: "list(tcp|rtu|rtutcp)"
+      protocol: "list(tcp|rtu|rtutcp|udp)"
       # TCP Modbus parameters
       host: "str?"
       port: "port?"
-      # RTU/Serial Modbus parameters  
+      # UDP Modbus parameters
+      gateway_id: "int?"  # If present will insert a gateway identifier after the MBAP header in UDP packets
+      prefix: "str?"      # N byte prefix before the MBAP header in UDP packets
+      server_query: "str?"      # Set server IP address and port that the device will resopond to
+      server_quert_response: "str?"  # Response expected for successful server query command
+      crc: "bool?"        # If true will append a modbus CRC16 checksum at the end of UDP packets
+      # RTU/Serial Modbus parameters
       device: "str?"
       baudrate: "int?"
       databits: "int?"

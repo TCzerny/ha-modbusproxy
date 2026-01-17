@@ -11,6 +11,7 @@ graph LR
     DeviceTCP["Modbus Device<br/> (TCP)"]
     DeviceRTUTCP["Modbus Device<br/> (RTU over TCP)"]
     DeviceRTU["Modbus Device<br/> (RTU serial)"]
+    DeviceUDP["Modbus Device<br/> (UDP)"]
 
     HA -->|TCP / RTU-over-TCP| ClientComp
     ClientComp -->|parsed request| Transformer
@@ -18,5 +19,6 @@ graph LR
     ModBusComp -->|connect/write/read| DeviceTCP
     ModBusComp -->|connect/write/read| DeviceRTUTCP
     ModBusComp -->|serial write/read| DeviceRTU
+    ModBusComp -->|send/receive UDP| DeviceUDP
     ModBusComp --> Transformer
     Proxy --> Logger

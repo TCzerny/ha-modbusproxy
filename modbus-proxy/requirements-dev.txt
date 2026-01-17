@@ -1,0 +1,5 @@
+pytest-cov>=4.0
+pre-commit>=3.4
+black>=23.9
+isort>=5.12
+flake8>=6.0

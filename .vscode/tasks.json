@@ -1,4 +1,24 @@
 {
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Tests (script)",
+      "type": "shell",
+      "command": "${workspaceFolder}/modbus-proxy/run_tests.sh",
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "Run Tests (Make)",
+      "type": "shell",
+      "command": "make test",
+      "options": {"cwd": "${workspaceFolder}/modbus-proxy"},
+      "problemMatcher": [],
+      "group": "test"
+    }
+  ]
+}
+{
     "version": "2.0.0",
     "tasks": [
       {
@@ -13,6 +33,12 @@
           "reveal": "always",
           "panel": "new"
         },
+        "problemMatcher": []
+      },
+      {
+        "label": "pytest",
+        "type": "shell",
+        "command": "ssh moonbean-int -c \"cd ~/solar/ha_modbusproxy && source venv/bin/activate && cd modbus-proxy && pytest -q\"",
         "problemMatcher": []
       }
     ]

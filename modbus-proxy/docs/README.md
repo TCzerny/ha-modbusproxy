@@ -2,11 +2,11 @@
 
 This document explains how `modbus-proxy` (the proxy between Home Assistant and Modbus devices) works, with diagrams and links to the relevant code in the repository.
 
-**Overview**
+## Overview
 - The proxy exposes a Modbus TCP server that Home Assistant (or other Modbus TCP clients) can talk to.
 - The proxy translates between Modbus TCP (MBAP frames) and RTU (serial) or RTU-over-TCP when needed.
 
-**Key runtime components**
+### Key runtime components
 - Client handler: reads client requests and auto-detects format (`Client._read`).
 - Transformer: converts requests and replies between formats (`ModBus._transform_request`, `ModBus._transform_reply`).
 - Bridge: maintains connection to the real device (TCP or serial) and performs write/read (`ModBus.open`, `ModBus._write`, `ModBus._read`, `_read_rtu`).
@@ -23,7 +23,7 @@ Important code locations (workspace relative links):
 - Main request loop (per client): [modbus-proxy/src/modbus_proxy.py](modbus-proxy/src/modbus_proxy.py#L785-L813)
 
 
-**Mermaid sequence diagram**
+### Sequence diagram
 
 ```mermaid
 sequenceDiagram
@@ -45,7 +45,7 @@ sequenceDiagram
 ```
 
 
-**Mermaid architecture diagram**
+### architecture diagram
 
 Inline diagram (Mermaid):
 
@@ -63,6 +63,7 @@ graph LR
     DeviceTCP["Modbus Device<br/> (TCP)"]
     DeviceRTUTCP["Modbus Device<br/> (RTU over TCP)"]
     DeviceRTU["Modbus Device<br/> (RTU serial)"]
+    DeviceUDP["Modbus Device<br/> (UDP)"]
 
     HA -->|TCP / RTU-over-TCP| ClientComp
     ClientComp -->|parsed request| Transformer
@@ -70,19 +71,17 @@ graph LR
     ModBusComp -->|connect/write/read| DeviceTCP
     ModBusComp -->|connect/write/read| DeviceRTUTCP
     ModBusComp -->|serial write/read| DeviceRTU
+    ModBusComp -->|send/receive UDP| DeviceUDP
     ModBusComp --> Transformer
     Proxy --> Logger
 ```
 
 Rendered image (if available):
 
-![Architecture diagram](architecture.svg)
-
-
 (The sequence diagram is available in Mermaid format in the repository — see `docs/sequence.mmd`.)
 
 
-**Notes / Tips**
+### Notes / Tips
 - Unit ID remapping is configured through `unit_id_remapping` in the device config; transformations apply both to requests and replies.
 - For serial devices the code prefers `serial_asyncio` and falls back to `pyserial` sync mode if unavailable.
 - Logging helpers `_log_modbus_message` and `_log_rtu_message` provide detailed parsing when debug logging is enabled.
@@ -93,9 +92,6 @@ If you want, I can:
 - Expand the README with sample config and run instructions.
 
 How to preview in VS Code
-- Install the recommended extensions (vscode will prompt if you open the workspace):
-    - Mermaid preview: `bierner.markdown-mermaid`
-    - Draw.io (optional): `hediet.vscode-drawio`
 
 - Open `docs/architecture.mmd` or `docs/sequence.mmd` and use the Mermaid preview provided by the extension.
 
@@ -103,12 +99,46 @@ Repository diagram files:
 - docs/architecture.mmd — Mermaid architecture diagram
 - docs/sequence.mmd — Mermaid sequence diagram
 
-Quick rendering via CLI (optional)
-You can render diagrams locally if you have the appropriate CLIs installed.
+## Config
+Example `modbus.udp` config (Powmr / Victor NM Eco devices)
 
-Mermaid CLI example:
-```bash
-npx @mermaid-js/mermaid-cli -i docs/architecture.mmd -o docs/architecture.svg
+```yaml
+devices:
+    - modbus:
+            url: udp://192.168.1.110:58899
+            timeout: 5
+            udp:
+                # Preflight: tell the inverter which local IP:port to connect back to
+                server_query: "set>server={HOST}:{PORT};"
+                server_query_response: "rsp>server=1;"
+                preflight_timeout: 5
+
+                # Gateway/routing id inserted after Unit ID (hex string) — legacy, avoid if possible
+                # gateway_id: "FF"
+
+                # How to build UDP packet from MBAP/TCP request:
+                # {SEQ} -> transaction id (MBAP bytes 0-1)
+                # {LEN} -> length field (MBAP bytes 4-5)
+                # {PAYLOAD} -> PDU (everything after MBAP header)
+                # {CRC} -> CRC16 little-endian over payload
+                byte_mapping: "{SEQ}0102{LEN}FF04{PAYLOAD}{CRC}"
+
+
+        listen:
+            bind: ":8899"
 ```
 
-<!-- PlantUML removed: use mermaid CLI to render Mermaid diagrams -->
+## Viewing Diagrams
+
+- Install the recommended extensions (vscode will prompt if you open the workspace):
+    - Mermaid preview: `bierner.markdown-mermaid`
+    - Draw.io (optional): `hediet.vscode-drawio`
+
+- Manual  
+    Quick rendering via CLI (optional)
+    You can render diagrams locally if you have the appropriate CLIs installed.
+
+    Mermaid CLI example:
+    ```bash
+    npx @mermaid-js/mermaid-cli -i docs/architecture.mmd -o docs/architecture.svg
+    ```

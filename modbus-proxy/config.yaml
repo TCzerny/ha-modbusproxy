@@ -103,11 +103,27 @@ schema:
       host: "str?"
       port: "port?"
       # UDP Modbus parameters
-      gateway_id: "int?"  # If present will insert a gateway identifier after the MBAP header in UDP packets
-      prefix: "str?"      # N byte prefix before the MBAP header in UDP packets
-      server_query: "str?"      # Set server IP address and port that the device will resopond to
-      server_quert_response: "str?"  # Response expected for successful server query command
-      crc: "bool?"        # If true will append a modbus CRC16 checksum at the end of UDP packets
+      byte_mapping: "str?"      # map the Modbus TCP request to an outgoing UDP packet
+      # Supported template tokens for `byte_mapping`:
+      #  - {SEQ}: two bytes transaction id (MBAP bytes 0-1)
+      #  - {LEN}, {LEN+N}, {LEN-N}: two-byte MBAP length (MBAP bytes 4-5) +/- offset
+      #  - {ID}: unit id (first byte of PDU)
+      #  - {PAYLOAD}: PDU bytes (skip unit id if {ID} was emitted before)
+      #  - {CRC}: little-endian Modbus RTU CRC computed over the most-recent payload
+      # Literal hex may be included outside braces, e.g. "FF 00 01".
+      reverse_byte_mapping: "str?"      # map the UDP response packet back to a Modbus TCP reply
+      # Supported template tokens for `reverse_byte_mapping`:
+      #  - {SEQ}: two bytes transaction id taken from the last TCP request
+      #  - {LEN}, {LEN+N}, {LEN-N}: two-byte length computed from the UDP payload length
+      #  - {ID}: unit id extracted from the UDP response (first byte)
+      #  - {PAYLOAD}: UDP payload (skip unit id if {ID} was emitted before)
+      #  - {CRC}: CRC may be requested but is usually not needed for TCP replies
+      # If the expanded reverse template contains a full MBAP header, the implementation
+      # validates the embedded Length field; if it differs from the UDP payload size
+      # the MBAP Length is corrected using the last request's MBAP header so the
+      # resulting TCP reply length always matches the device payload.
+      set_client_address: "str?"      # Set server IP address and port that the device will respond to
+      set_client_address_response: "str?"  # Response expected for successful server query command
       # RTU/Serial Modbus parameters
       device: "str?"
       baudrate: "int?"

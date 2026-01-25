@@ -31,11 +31,11 @@ class DummyProtocol:
 def bridge_factory():
 	"""Return a factory that creates a ModBus bridge with fresh dummy transport/protocol."""
 
-	def _make(udp_cfg=None, url="udp://127.0.0.1:1502", timeout=1, bind=":502"):
-		cfg = {
-			"modbus": {"url": url, "udp": (udp_cfg or {}), "timeout": timeout},
-			"listen": {"bind": bind},
-		}
+	def _make(udp_cfg=None, url="udp://192.168.25.147:1502", timeout=1, bind="192.168.25.247:8999"):
+		mod_conf = {"url": url, "timeout": timeout}
+		if udp_cfg:
+			mod_conf.update(udp_cfg)
+		cfg = {"modbus": mod_conf, "listen": {"bind": bind}}
 		bridge = ModBus(cfg)
 		bridge.udp_protocol = DummyProtocol()
 		bridge.udp_transport = DummyTransport()
@@ -47,7 +47,7 @@ def bridge_factory():
 def put_response(protocol, data, addr=None):
 	"""Convenience helper to put a response into a DummyProtocol queue."""
 	if addr is None:
-		addr = ("127.0.0.1", 1502)
+		addr = ("192.168.25.147", 1502)
 	return protocol.queue.put_nowait((data, addr))
 
 

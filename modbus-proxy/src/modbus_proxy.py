@@ -15,7 +15,13 @@ import contextlib
 import logging.config
 import os
 import stat
+import struct
 from urllib.parse import urlparse
+import ast
+import types
+import sys
+import traceback
+
 
 __version__ = "2.3.0"
 
@@ -54,6 +60,25 @@ DEFAULT_LOG_CONFIG = {
 log = logging.getLogger("modbus-proxy")
 
 
+DEFAULT_UDP_CONFIG_TRANSFORM_SNIPPET = """
+import struct, sys
+tcp_pkt_fmt = ">HHH%ds"
+udp_pkt_fmt = ">HHHBB%ds2s"
+def transform_tcp_udp(tcp_in_data: bytes) -> bytes:
+    payload_len = len(tcp_in_data) - 6
+    tcp_data = struct.unpack(tcp_pkt_fmt % payload_len, tcp_in_data)
+    if payload_len != tcp_data[2]:
+        raise Exception("Debug: Len mismatch ")
+    return struct.pack(udp_pkt_fmt % payload_len, tcp_data[0], 0x0102, payload_len + 4, 0xFF, 0x04, tcp_data[3], struct.pack("<H", crc(tcp_data[3]))), tcp_data
+
+def transform_udp_tcp(udp_in_data: bytes, tcp_in_data: bytes) -> bytes:
+    payload_len = len(udp_in_data) - 10
+    struct_str = udp_pkt_fmt % payload_len
+    udp_data = struct.unpack(udp_pkt_fmt % payload_len, udp_in_data)
+    return struct.pack(tcp_pkt_fmt % payload_len, udp_data[0], tcp_in_data[1], payload_len, udp_data[5])
+"""
+
+
 def parse_url(url):
     if "://" not in url:
         url = f"tcp://{url}"
@@ -62,6 +87,56 @@ def parse_url(url):
         url = result.geturl().replace("://", "://0")
         result = urlparse(url)
     return result
+
+
+def _modbus_crc(data: bytes) -> int:
+    """
+    Calculate Modbus RTU CRC-16 for the given data.
+    
+    Args:
+        data: Bytes to calculate CRC for (UID + function code + payload)
+    
+    Returns:
+        CRC value as integer (0-65535)
+    """
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            if crc & 0x0001:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc = crc >> 1
+    return crc
+
+def modbus_crc_bytes(data: bytes) -> int:
+    """
+    Calculate Modbus CRC and return as bytes (LSB first).
+    
+    Args:
+        data: Bytes to calculate CRC for
+    
+    Returns:
+        CRC as 2 bytes (little-endian, LSB first)
+    """
+    crc = _modbus_crc(data)
+    return crc
+
+
+def module_from_string(code: str, name: str = "<string>", extra_globals: dict | None = None) -> types.ModuleType:
+    # syntax check -> raises SyntaxError with location if bad
+    ast.parse(code, filename=name)
+    mod = types.ModuleType(name)
+    mod.__file__ = name
+    if extra_globals:
+        mod.__dict__.update(extra_globals)             # inject environment functions here
+    sys.modules[name] = mod
+    try:
+        exec(compile(code, name, "exec"), mod.__dict__)
+    except Exception:
+        traceback.print_exc()
+        raise
+    return mod
 
 
 class Connection:
@@ -424,7 +499,12 @@ class ModBus(Connection):
         modbus = config["modbus"]
         url = parse_url(modbus["url"])
         bind = parse_url(config["listen"]["bind"])
-        
+
+        self.port = 502 if bind.port is None else bind.port
+        self.timeout = modbus.get("timeout", None)
+        self.connection_time = modbus.get("connection_time", 0)
+        self.unit_id_remapping = config.get("unit_id_remapping") or {}
+
         # Determine if it's RTU or TCP based on URL scheme
         if url.scheme == "rtu":
             self.modbus_type = "rtu"
@@ -457,6 +537,12 @@ class ModBus(Connection):
             super().__init__(f"ModBus({url.hostname}:{url.port})", None, None)
             self.modbus_host = url.hostname
             self.modbus_port = url.port
+            # UDP specific attributes
+            transform_snippet = modbus.get("transform_snippet", DEFAULT_UDP_CONFIG_TRANSFORM_SNIPPET)
+            self.udp_transformer = module_from_string(transform_snippet, name="udp_transform_module", extra_globals={"crc": modbus_crc_bytes})
+            self.udp_set_addr_template = modbus.get("set_client_address")
+            self.udp_set_addr_resp_template = modbus.get("set_client_address_response")
+            self.udp_pre_timeout = modbus.get("set_client_timeout", self.timeout or 5)
         else:
             self.modbus_type = "tcp"
             super().__init__(f"ModBus({url.hostname}:{url.port})", None, None)
@@ -468,22 +554,22 @@ class ModBus(Connection):
             self.host = None  # None binds to all interfaces (IPv4 + IPv6)
         else:
             self.host = bind.hostname
-        self.port = 502 if bind.port is None else bind.port
-        self.timeout = modbus.get("timeout", None)
-        self.connection_time = modbus.get("connection_time", 0)
-        self.unit_id_remapping = config.get("unit_id_remapping") or {}
         self.server = None
         self.lock = asyncio.Lock()
-        # UDP specific attributes
-        self.udp_cfg = modbus.get("udp", {}) if isinstance(modbus, dict) else {}
-        self.udp_transport = None
-        self.udp_protocol = None
-        self._last_request_mbap = None
 
     @property
     def address(self):
         if self.server is not None:
             return self.server.sockets[0].getsockname()
+
+    def _tcp_unpack(self, data):
+        """Unpack TCP Modbus packet and store in self.tcp_pkt"""
+        l = len(data) - 6
+        return struct.unpack(">HHH{l-6}s", data)
+
+    def _tcp_pack(self, pkt):
+        """Unpack TCP Modbus packet and store in self.tcp_pkt"""
+        return struct.unpack(">HHHs", pkt)
 
     async def open(self):
         if self.modbus_type == "rtu":
@@ -596,13 +682,6 @@ class ModBus(Connection):
         if self.udp_transport is None or self.udp_protocol is None:
             raise RuntimeError("UDP transport not initialized")
 
-        cfg = self.udp_cfg or {}
-        # Save MBAP header from request if present (used to re-create TCP reply)
-        if len(data) >= 6:
-            self._last_request_mbap = bytes(data[:6])
-        else:
-            self._last_request_mbap = b'\x00\x00\x00\x00\x00\x00'
-
         # Helper to render templates using simple formatting
         def render_template(tpl):
             if tpl is None:
@@ -610,19 +689,22 @@ class ModBus(Connection):
             # Use the bridge listen address for HOST/PORT (so device can connect back)
             mapping = {"HOST": self.host or "0.0.0.0", "PORT": str(self.port or "")}
             # Allow additional vars from cfg
-            mapping.update(cfg.get("vars", {}))
-            try:
-                return tpl.format(**mapping)
-            except Exception:
-                return tpl
+            # mapping.update(cfg.get("vars", {}))
+            mapping1 = (*mapping,)
+            def safe_format(**kwargs):
+                s = "%r" % kwargs
+                print(s)
+            safe_format(**mapping)
+            from string import Template
+            v = Template(tpl).safe_substitute(**mapping)
+            return v
+            # except Exception:
+            #     return tpl
 
         # Preflight: send a server string and expect a specific response
         # support new config keys: set_client_address / set_client_address_response
-        set_addr_template = cfg.get("set_client_address")
-        set_addr_resp_template = cfg.get("set_client_address_response")
-        pre_timeout = cfg.get("set_client_timeout", self.timeout or 5)
-        if set_addr_template and set_addr_resp_template:
-            set_addr_req = render_template(set_addr_template)
+        if self.udp_set_addr_template and self.udp_set_addr_resp_template:
+            set_addr_req = render_template(self.udp_set_addr_template)
 
             try:
                 set_addr_req_bytes = bytes.fromhex(set_addr_req)
@@ -631,13 +713,13 @@ class ModBus(Connection):
 
             self.udp_transport.sendto(set_addr_req_bytes, (self.modbus_host, self.modbus_port))
             try:
-                data_recv, addr = await asyncio.wait_for(self.udp_protocol.queue.get(), timeout=pre_timeout)
+                data_recv, addr = await asyncio.wait_for(self.udp_protocol.queue.get(), timeout=self.udp_pre_timeout)
             except Exception as e:
                 self.log.error("UDP preflight timeout/wait error: %r", e)
                 return None
 
             # Compare response
-            expected = render_template(set_addr_resp_template)
+            expected = render_template(self.udp_set_addr_resp_template)
             try:
                 expected_bytes = bytes.fromhex(expected)
             except Exception:
@@ -647,255 +729,21 @@ class ModBus(Connection):
                 self.log.error("UDP preflight response mismatch: got %r expected %r", data_recv, expected_bytes)
                 return None
 
-        # Build UDP payload according to 'byte_mapping' (or legacy 'prefix') template if provided.
-        # The template supports tokens used by tests and configuration:
-        #  - {SEQ}: the first two MBAP bytes (transaction id)
-        #  - {LEN}, {LEN+N}, {LEN-N}: 2-byte MBAP length derived from TCP request (bytes 4-5)
-        #  - {ID}: Unit ID (first byte of PDU)
-        #  - {PAYLOAD}: PDU bytes (skips ID if preceded by {ID})
-        #  - {CRC}: little-endian Modbus RTU CRC over the payload or most recent payload token
-        # Literal hex may be included outside braces.
-        prefix_tpl = cfg.get("byte_mapping")
-
-        def expand_prefix(tpl):
-            # Expand a byte-mapping template into bytes. Keeps logic compact and
-            # robust to malformed templates (best-effort expansion).
-            out = bytearray()
-            i = 0
-            payload_for_crc = None
-            last_token = None
-            while i < len(tpl):
-                if tpl[i] == '{':
-                    j = tpl.find('}', i)
-                    if j == -1:
-                        break
-                    token = tpl[i+1:j].strip()
-                    if token == 'SEQ':
-                        out += data[0:2]
-                        last_token = 'SEQ'
-                    elif token.startswith('LEN'):
-                        # LEN is taken from MBAP (bytes 4-5) with optional offset
-                        try:
-                            base_len = int.from_bytes(data[4:6], byteorder='big')
-                        except Exception:
-                            base_len = 0
-                        if token == 'LEN':
-                            new_len = base_len
-                        else:
-                            try:
-                                if '+' in token:
-                                    off = int(token.split('+', 1)[1])
-                                    new_len = base_len + off
-                                elif '-' in token:
-                                    off = int(token.split('-', 1)[1])
-                                    new_len = base_len - off
-                                else:
-                                    new_len = base_len
-                            except Exception:
-                                new_len = base_len
-                        out += new_len.to_bytes(2, byteorder='big')
-                    elif token == 'PAYLOAD':
-                        # PAYLOAD is the TCP PDU; if {ID} was emitted just before, skip
-                        # the unit id byte from the PDU when including PAYLOAD.
-                        if last_token == 'ID':
-                            p = data[7:]
-                        else:
-                            p = data[6:]
-                        out += p
-                        payload_for_crc = p
-                        last_token = 'PAYLOAD'
-                    elif token == 'CRC':
-                        # Compute little-endian Modbus CRC over most-recent payload
-                        target = payload_for_crc if payload_for_crc is not None else out
-                        crc_val = self._crc(bytes(target))
-                        out += crc_val.to_bytes(2, byteorder='little')
-                    elif token == 'ID':
-                        try:
-                            out += data[6:7]
-                            last_token = 'ID'
-                        except Exception:
-                            pass
-                    i = j + 1
-                else:
-                    # Literal text between tokens — try hex, otherwise use raw bytes
-                    j = i
-                    while j < len(tpl) and tpl[j] != '{':
-                        j += 1
-                    lit = tpl[i:j].strip()
-                    if lit:
-                        try:
-                            out += bytes.fromhex(lit.replace(' ', ''))
-                        except Exception:
-                            out += lit.encode()
-                    i = j
-            return out
-
-        if prefix_tpl:
-            udp_payload = expand_prefix(prefix_tpl)
-        else:
-            # fallback: default behavior (strip MBAP and optionally insert gateway routing byte)
-            strip_mbap = cfg.get("strip_mbap_for_udp", True)
-            if strip_mbap and len(data) >= 7:
-                udp_payload = bytearray(data[6:])
-            else:
-                udp_payload = bytearray(data)
-            # gateway insertion removed — no-op
-
-            # apply mbap_map if present
-            for mapping in cfg.get("mbap_map", []):
-                try:
-                    mbap_offset = int(mapping.get("mbap_offset", 0))
-                    target_offset = int(mapping.get("target_offset", 0))
-                    length = int(mapping.get("length", 0))
-                    src = data[mbap_offset:mbap_offset + length]
-                    if len(udp_payload) < target_offset + length:
-                        udp_payload.extend(b"\x00" * (target_offset + length - len(udp_payload)))
-                    udp_payload[target_offset:target_offset + length] = src
-                except Exception as e:
-                    self.log.debug("UDP mbap_map failed: %r", e)
-
-            if "udp_payload_hex" in cfg:
-                try:
-                    udp_payload = bytearray(bytes.fromhex(cfg["udp_payload_hex"]))
-                except Exception:
-                    pass
+        udp_request_data, tcp_data = self.udp_transformer.transform_tcp_udp(data)
 
         # Send payload to device
-        self.udp_transport.sendto(bytes(udp_payload), (self.modbus_host, self.modbus_port))
+        self.udp_transport.sendto(bytes(udp_request_data), (self.modbus_host, self.modbus_port))
 
         # Wait for response
-        resp_timeout = cfg.get("response_timeout", self.timeout or 5)
+        resp_timeout = self.timeout
         try:
-            udata, addr = await asyncio.wait_for(self.udp_protocol.queue.get(), timeout=resp_timeout)
+            udp_response_data, _ = await asyncio.wait_for(self.udp_protocol.queue.get(), timeout=resp_timeout)
         except Exception as e:
             self.log.error("UDP device response timeout/wait error: %r", e)
             return None
 
-        # Optionally strip routing byte from response (if the device prepends a routing id after unit id)
-        response_strip_routing = cfg.get("response_strip_routing_after_unit", False)
-        if response_strip_routing and len(udata) > 1:
-            try:
-                # Remove the byte after unit id
-                udata = udata[0:1] + udata[2:]
-            except Exception as e:
-                self.log.debug("failed to strip routing byte from response: %r", e)
+        return self.udp_transformer.transform_udp_tcp(udp_response_data, tcp_data)
 
-        # If reverse mapping template provided, reconstruct the TCP reply according to it.
-        # Reverse templates support the same tokens but LEN is computed from the
-        # received UDP payload length. If the reverse expansion yields a full MBAP
-        # header, we validate the embedded Length field against the UDP payload
-        # length; otherwise we correct the MBAP Length using the last request's MBAP.
-        rev_tpl = cfg.get("reverse_byte_mapping")
-        if rev_tpl:
-            def expand_reverse(tpl):
-                out = bytearray()
-                i = 0
-                last_token = None
-                while i < len(tpl):
-                    if tpl[i] == '{':
-                        j = tpl.find('}', i)
-                        if j == -1:
-                            break
-                        token = tpl[i+1:j].strip()
-                        if token == 'SEQ':
-                            out += self._last_request_mbap[0:2]
-                            last_token = 'SEQ'
-                        elif token.startswith('LEN'):
-                            try:
-                                # For reverse mapping, base LEN is the length of the UDP payload (udata)
-                                base_len = len(udata)
-                            except Exception:
-                                base_len = 0
-                            if token == 'LEN':
-                                new_len = base_len
-                            else:
-                                try:
-                                    if '+' in token:
-                                        off = int(token.split('+', 1)[1])
-                                        new_len = base_len + off
-                                    elif '-' in token:
-                                        off = int(token.split('-', 1)[1])
-                                        new_len = base_len - off
-                                    else:
-                                        new_len = base_len
-                                except Exception:
-                                    new_len = base_len
-                            out += new_len.to_bytes(2, byteorder='big')
-                        elif token == 'ID':
-                            if len(udata) >= 1:
-                                out += udata[0:1]
-                            last_token = 'ID'
-                        elif token == 'PAYLOAD':
-                            if last_token == 'ID':
-                                out += udata[1:]
-                            else:
-                                out += udata
-                            last_token = 'PAYLOAD'
-                        elif token == 'CRC':
-                            # CRC token in reverse mapping: if PAYLOAD present, append CRC of payload
-                            if last_token == 'PAYLOAD':
-                                crc_val = self._crc(bytes(out if out else udata))
-                                out += crc_val.to_bytes(2, byteorder='little')
-                        else:
-                            pass
-                        i = j + 1
-                    else:
-                        j = i
-                        while j < len(tpl) and tpl[j] != '{':
-                            j += 1
-                        lit = tpl[i:j].strip()
-                        if lit:
-                            try:
-                                out += bytes.fromhex(lit.replace(' ', ''))
-                            except Exception:
-                                out += lit.encode()
-                        i = j
-                return bytes(out)
-
-            tcp_pdu = expand_reverse(rev_tpl)
-            # If expanded reverse template already contains MBAP (starts with SEQ from last request),
-            # validate its length field matches the UDP payload length; otherwise fall back.
-            if self._last_request_mbap and len(tcp_pdu) >= 6 and tcp_pdu[0:2] == self._last_request_mbap[0:2]:
-                try:
-                    mapped_len = int.from_bytes(tcp_pdu[4:6], byteorder='big')
-                except Exception:
-                    mapped_len = None
-                if mapped_len == len(udata):
-                    return tcp_pdu
-                # fallthrough to construct a corrected MBAP reply below
-
-            # Build MBAP header based on last request but correct the Length field
-            last_mbap = self._last_request_mbap or b"\x00\x00\x00\x00\x00\x00"
-            try:
-                mbap = bytearray(last_mbap)
-                mbap[4:6] = int(len(udata)).to_bytes(2, byteorder='big')
-            except Exception:
-                mbap = bytearray(b"\x00\x00\x00\x00\x00\x00")
-                mbap[4:6] = int(len(udata)).to_bytes(2, byteorder='big')
-
-            # If tcp_pdu already contains an (incorrect) MBAP at start, prefer MBAP+udata
-            if len(tcp_pdu) >= 6 and tcp_pdu[0:2] == mbap[0:2]:
-                tcp_reply = bytes(mbap) + bytes(udata)
-            else:
-                tcp_reply = bytes(mbap) + tcp_pdu
-            return tcp_reply
-
-        # Default: Reconstruct a TCP-style reply by prepending MBAP header from the last request
-        tcp_reply = (self._last_request_mbap or b"\x00\x00\x00\x00\x00\x00") + bytes(udata)
-        return tcp_reply
-
-    def _crc(self,data):
-        crc = 0xffff
-        for n in range(len(data)):
-            crc ^= data[n]
-            for i in range(8):
-                if crc & 1:
-                    crc >>= 1
-                    crc ^= 0xA001
-                else:
-                    crc >>= 1
-        return crc				
-		
     def _transform_request(self, request, source_format=None):
         """Transform request from HA to appropriate format for target device"""
         

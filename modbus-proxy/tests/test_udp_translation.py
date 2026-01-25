@@ -5,43 +5,50 @@ import pytest
 def hexbytes(s: str) -> bytes:
     return bytes.fromhex(s.replace(" ", ""))
 
+tcp_keys = ["TID", "PROT", "LEN", "PAYLOAD"]
+tcp_format = ">HHH%ds"
+
+udp_keys = ["TID", "PROT", "LEN", "GWID" "PAYLOAD", "CRC"]
+udp_format = ">HHHB%dsH"
+
+req_map = lambda pkt, crc : { "TID": pkt["TID"], "PROT": 0x0102, "LEN": len(pkt["PAYLOAD"]) + 3, "GWID": 0xFF, "PAYLOAD": pkt["PAYLOAD"], "CRC": crc(pkt["PAYLOAD"]) }
+resp_map = lambda pkt, opkt : { "TID": pkt["TID"], "PROT": opkt["PROT"], "LEN": len(pkt["PAYLOAD"]), "PAYLOAD": pkt["PAYLOAD"] }
 
 UDP_COMMON_CFG = {
-    "set_client_address": "set>server={IP_ADDRESS}:{PORT};",
+    "set_client_address": "set>server=$HOST:$PORT;",
     "set_client_address_response": "rsp>server=1;",
-    "byte_mapping": "{SEQ}0102{LEN+3}FF{ID}{PAYLOAD}{CRC}",
-    "reverse_byte_mapping": "{SEQ}0000{LEN-3}{ID}{PAYLOAD}",
 }
 
 
+# captured data from real device with preflight and gateway
 TEST_VECTORS = [
     (
         {},
-        hexbytes("00 01 00 00 00 07 04 05 03 13 89 00 01"),
+        hexbytes("00 01 00 00 00 06 05 03 13 89 00 01"),
         hexbytes("00 01 01 02 00 0a ff 04 05 03 13 89 00 01 50 e0"),
         hexbytes("00 01 01 02 00 09 ff 04 05 03 02 00 00 49 84"),
-        hexbytes("00 01 00 00 00 06 04 05 03 02 00 00"),
+        hexbytes("00 01 00 00 00 05 05 03 02 00 00"),
     ),
     (
         {},
-        hexbytes("00 02 00 00 00 07 04 05 03 13 8a 00 01"),
+        hexbytes("00 02 00 00 00 06 05 03 13 8a 00 01"),
         hexbytes("00 02 01 02 00 0a ff 04 05 03 13 8a 00 01 a0 e0"),
         hexbytes("00 02 01 02 00 09 ff 04 05 03 02 00 00 49 84"),
-        hexbytes("00 02 00 00 00 06 04 05 03 02 00 00"),
+        hexbytes("00 02 00 00 00 05 05 03 02 00 00"),
     ),
     (
         {},
-        hexbytes("00 04 00 00 00 07 04 05 03 13 8c 00 01"),
+        hexbytes("00 04 00 00 00 06 05 03 13 8c 00 01"),
         hexbytes("00 04 01 02 00 0a ff 04 05 03 13 8c 00 01 40 e1"),
         hexbytes("00 04 01 02 00 09 ff 04 05 03 02 00 01 88 44"),
-        hexbytes("00 04 00 00 00 06 04 05 03 02 00 01"),
+        hexbytes("00 04 00 00 00 05 05 03 02 00 01"),
     ),
     (
         {},
-        hexbytes("00 22 00 00 00 07 04 05 03 13 9e 00 01"),
+        hexbytes("00 22 00 00 00 06 05 03 13 9e 00 01"),
         hexbytes("00 22 01 02 00 0a ff 04 05 03 13 9e 00 01 e0 e4"),
         hexbytes("00 22 01 02 00 09 ff 04 05 03 02 00 32 c8 51"),
-        hexbytes("00 22 00 00 00 06 04 05 03 02 00 32"),
+        hexbytes("00 22 00 00 00 05 05 03 02 00 32"),
     ),
 ]
 
@@ -73,7 +80,7 @@ async def test_udp_translation_with_preflight_and_gateway(
                 # push the expected device response into the protocol queue
                 asyncio.get_event_loop().call_soon_threadsafe(
                     bridge.udp_protocol.queue.put_nowait,
-                    (expected_tcp_response[6:], (bridge.modbus_host, bridge.modbus_port)),
+                    (udp_response, (bridge.modbus_host, bridge.modbus_port)),
                 )
 
     bridge.udp_transport = MockTransport()
@@ -91,8 +98,14 @@ async def test_udp_translation_with_preflight_and_gateway(
         await asyncio.sleep(0.01)
     else:
         task.cancel()
-        pytest.fail("UDP request was not sent (preflight/actual send missing)")
+        pytest.fail(f"UDP request was not sent (preflight/actual send missing) {bridge.udp_transport.calls}")
 
+    print(f"# UDP send calls: {len(bridge.udp_transport.calls)}")
+    print(f"UDP send call[0]: {bridge.udp_transport.calls[0]}")
+    print(f"UDP send call[1]: {bridge.udp_transport.calls[1]}")
+    assert bridge.udp_transport.calls[0] == (b"set>server=192.168.25.247:8999;", ("192.168.25.147", 1502)), (
+        f"sent UDP client info mismatch\nexpected: (b'set>server=192.168.25.247:8999;', (\"192.168.25.147\", 1502))\nactual:   {bridge.udp_transport.calls[0]}"
+    )
     # Inspect the actual sent UDP payload (the second send)
     sent_payload, _addr = bridge.udp_transport.calls[1]
 

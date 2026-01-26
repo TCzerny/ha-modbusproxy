@@ -14,11 +14,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - name: Install dependencies
         run: |
           python -m venv .venv
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -r modbus-proxy/requirements.txt
+          .venv/bin/pip install -r modbus-proxy/requirements-dev.txt
       - name: Run tests
         run: .venv/bin/pytest modbus-proxy -q

@@ -20,6 +20,7 @@ jobs:
         pip install pyYAML
         pip install toml
         pip install pylint
+        pip install pytest
     - name: Analysing the code with pylint
       run: |
         pylint $(git ls-files '*.py')

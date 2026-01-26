@@ -42,7 +42,7 @@ async def test_udp_prefix_and_crc_and_vars(bridge_factory):
         "listen": {"bind": ":502"},
     }
 
-    bridge = bridge_factory({"byte_mapping": "{SEQ}{PAYLOAD}{CRC}", "vars": {"EXTRA": "ignored"}})
+    bridge = bridge_factory()
 
     # Request with MBAP + payload
     mbap = b"\xAA\xBB\x00\x00\x00\x03"

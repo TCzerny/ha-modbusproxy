@@ -1,13 +1,13 @@
-name: "Modbus Proxy"
-version: "2.2.6"
-slug: "modbus_proxy"
-description: "A powerful multi-device Modbus TCP and RTU proxy"
+name: "Modbus Proxy+"
+version: "2.3.0"
+slug: "modbus_proxy_plus"
+description: "A powerful multi-device Modbus TCP, and RTU proxy"
 arch:
   - aarch64
   - amd64
   - armhf
   - armv7
-url: "https://github.com/TCzerny/ha-modbusproxy"
+url: "https://github.com/mspieth/ha-modbusproxy"
 startup: services
 init: false
 host_network: true

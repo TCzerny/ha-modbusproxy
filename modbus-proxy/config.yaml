@@ -1,6 +1,9 @@
-name: "Modbus Proxy+"
-version: "2.3.0"
-slug: "modbus_proxy_plus"
+# name: "Modbus Proxy"
+# version: "2.3.0"
+# slug: "modbus_proxy"
+name: "Modbus Proxy (Dev)"
+version: "dev"
+slug: "modbus_proxy_dev"
 description: "A powerful multi-device Modbus TCP, and RTU proxy"
 arch:
   - aarch64

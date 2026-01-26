@@ -174,7 +174,7 @@ class Connection:  # pylint: disable=too-many-instance-attributes
             and not self.reader.at_eof()
         )
 
-    async def close(self): # pylint: disable=too-many-branches
+    async def close(self):  # pylint: disable=too-many-branches
         """Close the connection."""
         # pylint: disable=no-member
         if hasattr(self, "modbus_type") and self.modbus_type == "rtu":

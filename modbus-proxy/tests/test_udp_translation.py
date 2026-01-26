@@ -1,18 +1,42 @@
+"""Tests for UDP translation with preflight and gateway ID handling."""
+
 import asyncio
 import pytest
 
 
 def hexbytes(s: str) -> bytes:
+    """Convert a hex string with spaces into bytes."""
     return bytes.fromhex(s.replace(" ", ""))
 
-tcp_keys = ["TID", "PROT", "LEN", "PAYLOAD"]
-tcp_format = ">HHH%ds"
 
-udp_keys = ["TID", "PROT", "LEN", "GWID" "PAYLOAD", "CRC"]
-udp_format = ">HHHB%dsH"
+TCP_KEYS = ["TID", "PROT", "LEN", "PAYLOAD"]
+TCP_FORMAT = ">HHH%ds"
 
-req_map = lambda pkt, crc : { "TID": pkt["TID"], "PROT": 0x0102, "LEN": len(pkt["PAYLOAD"]) + 3, "GWID": 0xFF, "PAYLOAD": pkt["PAYLOAD"], "CRC": crc(pkt["PAYLOAD"]) }
-resp_map = lambda pkt, opkt : { "TID": pkt["TID"], "PROT": opkt["PROT"], "LEN": len(pkt["PAYLOAD"]), "PAYLOAD": pkt["PAYLOAD"] }
+UDP_KEYS = ["TID", "PROT", "LEN", "GWIDPAYLOAD", "CRC"]
+UDP_FORMAT = ">HHHB%dsH"
+
+
+def req_map(pkt: dict, crc: callable) -> dict:
+    """Map TCP request fields to UDP request fields."""
+    return {
+        "TID": pkt["TID"],
+        "PROT": 0x0102,
+        "LEN": len(pkt["PAYLOAD"]) + 3,
+        "GWID": 0xFF,
+        "PAYLOAD": pkt["PAYLOAD"],
+        "CRC": crc(pkt["PAYLOAD"]),
+    }
+
+
+def resp_map(pkt: dict, opkt: dict) -> dict:
+    """Map UDP response fields to TCP response fields."""
+    return {
+        "TID": pkt["TID"],
+        "PROT": opkt["PROT"],
+        "LEN": len(pkt["PAYLOAD"]),
+        "PAYLOAD": pkt["PAYLOAD"],
+    }
+
 
 UDP_COMMON_CFG = {
     "set_client_address": "set>server=$HOST:$PORT;",
@@ -58,9 +82,15 @@ TEST_VECTORS = [
     "udp_cfg,tcp_request,expected_udp_request,udp_response,expected_tcp_response",
     TEST_VECTORS,
 )
-async def test_udp_translation_with_preflight_and_gateway(
-    bridge_factory, udp_cfg, tcp_request, expected_udp_request, udp_response, expected_tcp_response
+async def test_udp_translation_with_preflight_and_gateway(  # pylint: disable=R0913,R0917
+    bridge_factory,
+    udp_cfg,
+    tcp_request,
+    expected_udp_request,
+    udp_response,
+    expected_tcp_response,
 ):
+    """Test UDP translation with preflight client address setting and gateway ID insertion."""
     # Merge common settings into per-vector udp_cfg
     merged_cfg = dict(UDP_COMMON_CFG)
     merged_cfg.update(udp_cfg or {})
@@ -68,14 +98,19 @@ async def test_udp_translation_with_preflight_and_gateway(
 
     # Replace the udp_transport with a mock that captures sendto calls and
     # injects the device response after the actual request is sent.
-    class MockTransport:
+    class MockTransport:  # pylint: disable=R0903
+        """Mock UDP transport that records sends and injects response."""
+
         def __init__(self):
             self.calls = []
 
         def sendto(self, data, addr=None):
+            """Mock sendto that records calls and injects response after actual request."""
             # record the send
             self.calls.append((bytes(data), addr))
-            # If this is the second send (index 1) — actual request after preflight — inject response
+            # If this is the second send (index 1)
+            #  — actual request after preflight
+            #  — inject response
             if len(self.calls) == 2:
                 # push the expected device response into the protocol queue
                 asyncio.get_event_loop().call_soon_threadsafe(
@@ -86,10 +121,15 @@ async def test_udp_translation_with_preflight_and_gateway(
     bridge.udp_transport = MockTransport()
 
     # Provide preflight response that matches set_client_address_response
-    await bridge.udp_protocol.queue.put((b"rsp>server=1;", (bridge.modbus_host, bridge.modbus_port)))
+    await bridge.udp_protocol.queue.put(
+        (b"rsp>server=1;", (bridge.modbus_host, bridge.modbus_port))
+    )
 
-    # Start the translation but don't await it yet — it will perform preflight, send UDP, then wait for response
-    task = asyncio.create_task(bridge._udp_write_read(tcp_request))
+    # Start the translation but don't await it yet
+    # — it will perform preflight, send UDP, then wait for response
+    task = asyncio.create_task(
+        bridge._udp_write_read(tcp_request)  # pylint: disable=W0212
+    )
 
     # Wait until the MockTransport has recorded the preflight and the actual request (2 sends)
     for _ in range(50):
@@ -98,20 +138,28 @@ async def test_udp_translation_with_preflight_and_gateway(
         await asyncio.sleep(0.01)
     else:
         task.cancel()
-        pytest.fail(f"UDP request was not sent (preflight/actual send missing) {bridge.udp_transport.calls}")
+        pytest.fail(
+            f"UDP request was not sent (preflight/actual send missing) {bridge.udp_transport.calls}"
+        )
 
     print(f"# UDP send calls: {len(bridge.udp_transport.calls)}")
     print(f"UDP send call[0]: {bridge.udp_transport.calls[0]}")
     print(f"UDP send call[1]: {bridge.udp_transport.calls[1]}")
-    assert bridge.udp_transport.calls[0] == (b"set>server=192.168.25.247:8999;", ("192.168.25.147", 1502)), (
-        f"sent UDP client info mismatch\nexpected: (b'set>server=192.168.25.247:8999;', (\"192.168.25.147\", 1502))\nactual:   {bridge.udp_transport.calls[0]}"
+    assert bridge.udp_transport.calls[0] == (
+        b"set>server=192.168.25.247:8999;",
+        ("192.168.25.147", 1502),
+    ), (
+        "sent UDP client info mismatch\nexpected: "
+        "(b'set>server=192.168.25.247:8999;', (\"192.168.25.147\", 1502))\n"
+        f"actual:   {bridge.udp_transport.calls[0]}"
     )
     # Inspect the actual sent UDP payload (the second send)
     sent_payload, _addr = bridge.udp_transport.calls[1]
 
     # Compare the exact UDP bytes that were sent
     assert sent_payload == expected_udp_request, (
-        f"sent UDP payload mismatch\nexpected: {expected_udp_request.hex()}\nactual:   {sent_payload.hex()}"
+        f"sent UDP payload mismatch\nexpected: {expected_udp_request.hex()}\n"
+        f"actual:   {sent_payload.hex()}"
     )
 
     # Await the translation result (TCP reply reconstructed by the bridge)
@@ -119,6 +167,6 @@ async def test_udp_translation_with_preflight_and_gateway(
 
     # The reconstructed TCP reply should match the expected TCP response exactly
     assert tcp_reply == expected_tcp_response, (
-        f"tcp reply mismatch\nexpected: {expected_tcp_response.hex()}\nactual:   {tcp_reply.hex()}"
+        f"tcp reply mismatch\nexpected: {expected_tcp_response.hex()}\n"
+        f"actual:   {tcp_reply.hex()}"
     )
-

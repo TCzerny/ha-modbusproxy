@@ -1,14 +1,23 @@
-import asyncio
+"""Tests for UDP edge cases in modbus-proxy."""
+
+# pylint: disable=W0212
 import struct
 import pytest
 
-from modbus_proxy import ModBus, modbus_crc_bytes
+from modbus_proxy import modbus_crc
 
 
 @pytest.mark.asyncio
 async def test_udp_preflight_timeout(bridge_factory):
+    """Test that UDP preflight timeout is handled gracefully."""
     # preflight expected but no response -> None returned
-    bridge = bridge_factory({"set_client_address": "AA", "set_client_address_response": "OK", "set_client_timeout": 0.01},)
+    bridge = bridge_factory(
+        {
+            "set_client_address": "AA",
+            "set_client_address_response": "OK",
+            "set_client_timeout": 0.01,
+        },
+    )
     # no response put into queue
     mbap = b"\x00\x01\x00\x00\x00\x02"
     req = mbap + b"\x01\x03"
@@ -18,13 +27,22 @@ async def test_udp_preflight_timeout(bridge_factory):
 
 @pytest.mark.asyncio
 async def test_udp_malformed_prefix_template(bridge_factory):
-    # unknown token should be ignored and not crash
-    bridge = bridge_factory({"byte_mapping": "{UNKNOWN}{PAYLOAD}{CRC}"})
-    # build a full UDP packet (TID/PROT/LEN/GWID/PAYLOAD/CRC) from the payload
-    payload = b"\x01\x03\x02\x00\x2A"
+    """Test that unknown token in prefix template is ignored and does not crash."""
+    bridge = bridge_factory()
+    payload = b"\x01\x03\x02\x00\x2a"
     plen = len(payload)
-    udp_pkt = struct.pack(f">HHHB{plen}sH", 0x0002, 0x0102, plen + 3, 0xFF, payload, modbus_crc_bytes(payload))
-    await bridge.udp_protocol.queue.put((udp_pkt, (bridge.modbus_host, bridge.modbus_port)))
+    udp_pkt = struct.pack(
+        f">HHHB{plen}sH",
+        0x0002,
+        0x0102,
+        plen + 3,
+        0xFF,
+        payload,
+        modbus_crc(payload),
+    )
+    await bridge.udp_protocol.queue.put(
+        (udp_pkt, (bridge.modbus_host, bridge.modbus_port))
+    )
     mbap = b"\x00\x02\x00\x00\x00\x03"
     req = mbap + b"\x01\x03\x00"
     res = await bridge._udp_write_read(req)
@@ -33,12 +51,22 @@ async def test_udp_malformed_prefix_template(bridge_factory):
 
 @pytest.mark.asyncio
 async def test_udp_gateway_insertion_edge(bridge_factory):
-    # If payload is too short, gateway should be inserted safely
+    """Test that gateway ID insertion handles short payloads safely."""
     bridge = bridge_factory({})
-    payload = b"\x01\x03\x02\x00\x2A"
+    payload = b"\x01\x03\x02\x00\x2a"
     plen = len(payload)
-    udp_pkt = struct.pack(f">HHHB{plen}sH", 0x0004, 0x0102, plen + 3, 0xFF, payload, modbus_crc_bytes(payload))
-    bridge.udp_protocol.queue.put_nowait((udp_pkt, (bridge.modbus_host, bridge.modbus_port)))
+    udp_pkt = struct.pack(
+        f">HHHB{plen}sH",
+        0x0004,
+        0x0102,
+        plen + 3,
+        0xFF,
+        payload,
+        modbus_crc(payload),
+    )
+    bridge.udp_protocol.queue.put_nowait(
+        (udp_pkt, (bridge.modbus_host, bridge.modbus_port))
+    )
     mbap = b"\x00\x04\x00\x00\x00\x00"
     req = mbap  # no payload after MBAP
     await bridge._udp_write_read(req)

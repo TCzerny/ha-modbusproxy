@@ -1,6 +1,7 @@
 PyYAML>=5.4
 pyserial>=3.5
 pyserial-asyncio>=0.5
+toml>=0.10.2
 
 # Test dependencies
 pytest>=7.0

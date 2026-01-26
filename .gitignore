@@ -66,6 +66,7 @@ known_devices.yaml
 
 # Development and testing
 .pytest_cache/
+.pylintrc
 .coverage
 htmlcov/
 .tox/

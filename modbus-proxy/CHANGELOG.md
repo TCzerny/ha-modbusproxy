@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.7] - 2026-05-11
+
+### Changed
+- **Build (Docker BuildKit)** - Migrated from `build.yaml` to a pinned multi-arch base image `ghcr.io/home-assistant/base-python:3.13-alpine3.23` in the `Dockerfile` (default `BUILD_FROM`; Supervisor may still override at build time). Aligns with [Migrating app builds to Docker BuildKit](https://developers.home-assistant.io/blog/2026/04/02/builder-migration).
+
+### Breaking
+- **Supported architectures** - `armhf` and `armv7` are no longer listed in `config.yaml`. Official Home Assistant base images for this path are multi-arch for **amd64** and **arm64** only. Use a 64-bit OS (e.g. aarch64) on Raspberry Pi-class hardware.
+
 ## [2.2.6] - 2025-10-26
 
 ### Fixed

@@ -8,13 +8,14 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 
 ## ✅ STABLE VERSION
 
-**This is version 2.2.7 with Docker BuildKit builds, comprehensive TCP-to-RTU device support, and full serial device access.**
+**This is version 2.2.8 with client connection limits, idle timeout cleanup, Docker BuildKit builds, comprehensive TCP-to-RTU device support, and full serial device access.**
 
 **✅ Key Features:**
 - **Protocol Auto-Detection**: Automatically handles TCP and RTU over TCP from Home Assistant
 - **Universal Support**: All protocol combinations supported (TCP ↔ RTU ↔ RTU over TCP)
 - **IPv6 Compatibility**: Full dual-stack IPv4 and IPv6 support
 - **Enhanced Debugging**: Detailed protocol transformation logging
+- **Connection hardening**: `max_clients` and `client_idle_timeout` to prevent FD exhaustion on long-running add-ons
 - **Supported architectures**: **amd64** and **aarch64** (arm64) only
 
 **Installation:**
@@ -23,6 +24,17 @@ A powerful multi-device Modbus TCP proxy for Home Assistant with enhanced loggin
 3. Configure your Modbus devices
 
 **Note:** Home Assistant Supervisor automatically installs the latest stable version.
+
+## 🆕 What's New in Version 2.2.8
+
+**Client connection hardening (EMFILE / Errno 24 mitigation):**
+- 🛡️ **`max_clients`** - Cap concurrent client TCP sockets per listener (default: `16`; `0` = unlimited)
+- ⏱️ **`client_idle_timeout`** - Close orphaned client sockets with no requests (default: `300` seconds; `0` = disabled)
+- 📊 **Active client logging** - Logs `active=N/max` on connect, disconnect, reject, and idle close
+
+**Notes:**
+- Keep `client_idle_timeout` well above your Modbus Manager / HA poll intervals so persistent hub sessions are not closed between polls
+- Disabling these limits is not recommended for long-running add-ons
 
 ## 🆕 What's New in Version 2.2.7
 

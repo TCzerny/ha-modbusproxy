@@ -18,3 +18,5 @@ devices:
       connection_time: __CONNECTIONTIME__ # delay after connection (s) (optional, default: 0)
     listen:
       bind: 0:__LISTENPORT__ # listening address (mandatory)
+      max_clients: 16 # max concurrent client sockets (optional, 0 = unlimited)
+      client_idle_timeout: 300.0 # close idle clients after N seconds (optional, 0 = disabled)

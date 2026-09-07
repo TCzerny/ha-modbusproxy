@@ -17,9 +17,10 @@ import os
 import stat
 from urllib.parse import urlparse
 
-__version__ = "0.8.5"
+__version__ = "0.8.6"
 
 # Changelog:
+# 0.8.6 - Limit concurrent client connections and close idle clients (FD leak / EMFILE mitigation)
 # 0.8.5 - Normalize RTU device path: ensure absolute path and resolve symlinks 
 # 0.8.4 - Fix RTU over TCP communication issue, improve format detection
 #         - Fixed assumption that HA always expects TCP format responses
@@ -456,6 +457,20 @@ class ModBus(Connection):
         self.port = 502 if bind.port is None else bind.port
         self.timeout = modbus.get("timeout", None)
         self.connection_time = modbus.get("connection_time", 0)
+        listen = config.get("listen") or {}
+        # Cap concurrent HA/client sockets per listener (mitigates EMFILE / Errno 24).
+        self.max_clients = int(
+            listen.get("max_clients", modbus.get("max_clients", 16))
+        )
+        # Close client sockets with no request traffic (orphans after reconnect).
+        # 0 disables idle timeout. Keep well above Modbus Manager poll intervals.
+        self.client_idle_timeout = float(
+            listen.get(
+                "client_idle_timeout",
+                modbus.get("client_idle_timeout", 300.0),
+            )
+        )
+        self._active_clients = 0
         self.unit_id_remapping = config.get("unit_id_remapping") or {}
         self.server = None
         self.lock = asyncio.Lock()
@@ -782,33 +797,96 @@ class ModBus(Connection):
                 
                 return rtu_reply
 
+    async def _reject_client(self, writer):
+        peer = writer.get_extra_info("peername")
+        peer_str = f"{peer[0]}:{peer[1]}" if peer else "unknown"
+        self.log.warning(
+            "rejecting client %s: active=%s max=%s",
+            peer_str,
+            self._active_clients,
+            self.max_clients,
+        )
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except Exception as error:
+            self.log.debug("failed to close rejected client %s: %r", peer_str, error)
+
     async def handle_client(self, reader, writer):
-	
-	
-        async with Client(reader, writer) as client:
-            while True:
-                request = await client.read()
-                if not request:
-                    break
-                
-                # Detect client request format (TCP vs RTU over TCP)
-                is_tcp_request = len(request) >= 6 and int.from_bytes(request[2:4], "big") == 0
-                client_format = "TCP" if is_tcp_request else "RTU over TCP"
-                
-                # Log proxy activity overview
-                if hasattr(self, 'modbus_type') and self.modbus_type == 'rtu':
-                    self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → RTU:{self.device} (Request #{client.request_count}, {client_format})")
-                elif hasattr(self, 'modbus_type') and self.modbus_type == 'rtutcp':
-                    self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → RTU(over)TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count}, {client_format})")
-                else:
-                    self.log.debug(f"PROXY: {client.client_ip}:{client.client_port} → TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count}, {client_format})")
-                
-                reply = await self.write_read(self._transform_request(request, client_format))
-                if not reply:
-                    break
-                result = await client.write(self._transform_reply(reply, client_format))
-                if not result:
-                    break
+        if self.max_clients > 0 and self._active_clients >= self.max_clients:
+            await self._reject_client(writer)
+            return
+
+        self._active_clients += 1
+        try:
+            async with Client(reader, writer) as client:
+                self.log.info(
+                    "active clients: %s/%s (from %s:%s)",
+                    self._active_clients,
+                    self.max_clients if self.max_clients > 0 else "unlimited",
+                    client.client_ip,
+                    client.client_port,
+                )
+                while True:
+                    try:
+                        if self.client_idle_timeout and self.client_idle_timeout > 0:
+                            request = await asyncio.wait_for(
+                                client.read(),
+                                timeout=self.client_idle_timeout,
+                            )
+                        else:
+                            request = await client.read()
+                    except asyncio.TimeoutError:
+                        self.log.info(
+                            "client idle timeout (%ss), closing %s:%s (active=%s)",
+                            self.client_idle_timeout,
+                            client.client_ip,
+                            client.client_port,
+                            self._active_clients,
+                        )
+                        break
+
+                    if not request:
+                        break
+
+                    # Detect client request format (TCP vs RTU over TCP)
+                    is_tcp_request = (
+                        len(request) >= 6
+                        and int.from_bytes(request[2:4], "big") == 0
+                    )
+                    client_format = "TCP" if is_tcp_request else "RTU over TCP"
+
+                    # Log proxy activity overview
+                    if hasattr(self, "modbus_type") and self.modbus_type == "rtu":
+                        self.log.debug(
+                            f"PROXY: {client.client_ip}:{client.client_port} → RTU:{self.device} (Request #{client.request_count}, {client_format})"
+                        )
+                    elif hasattr(self, "modbus_type") and self.modbus_type == "rtutcp":
+                        self.log.debug(
+                            f"PROXY: {client.client_ip}:{client.client_port} → RTU(over)TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count}, {client_format})"
+                        )
+                    else:
+                        self.log.debug(
+                            f"PROXY: {client.client_ip}:{client.client_port} → TCP:{self.modbus_host}:{self.modbus_port} (Request #{client.request_count}, {client_format})"
+                        )
+
+                    reply = await self.write_read(
+                        self._transform_request(request, client_format)
+                    )
+                    if not reply:
+                        break
+                    result = await client.write(
+                        self._transform_reply(reply, client_format)
+                    )
+                    if not result:
+                        break
+        finally:
+            self._active_clients = max(0, self._active_clients - 1)
+            self.log.info(
+                "active clients: %s/%s",
+                self._active_clients,
+                self.max_clients if self.max_clients > 0 else "unlimited",
+            )
 
     async def start(self):
         self.server = await asyncio.start_server(
@@ -826,7 +904,16 @@ class ModBus(Connection):
             await self.start()
         async with self.server:
             device_info = f"Device({self.modbus_host}:{self.modbus_port})" if self.modbus_type == "tcp" or self.modbus_type == "rtutcp" else f"Device({self.device})"
-            self.log.info(f"Ready to accept requests on {self.host}:{self.port} for {device_info}")
+            idle = (
+                f"{self.client_idle_timeout}s"
+                if self.client_idle_timeout and self.client_idle_timeout > 0
+                else "disabled"
+            )
+            max_clients = self.max_clients if self.max_clients > 0 else "unlimited"
+            self.log.info(
+                f"Ready to accept requests on {self.host}:{self.port} for {device_info} "
+                f"(max_clients={max_clients}, client_idle_timeout={idle})"
+            )
             await self.server.serve_forever()
 
 

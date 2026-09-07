@@ -257,10 +257,20 @@ EOF
         fi
     fi
     
-    # Add listen configuration
+    # Add listen configuration (client connection limits / idle cleanup)
+    MAX_CLIENTS=$(bashio::config "modbus_devices[${DEVICE_COUNT}].max_clients" "16" 2>/dev/null || echo "16")
+    CLIENT_IDLE_TIMEOUT=$(bashio::config "modbus_devices[${DEVICE_COUNT}].client_idle_timeout" "300.0" 2>/dev/null || echo "300.0")
+    if [ -z "$MAX_CLIENTS" ] || [ "$MAX_CLIENTS" = "null" ]; then
+        MAX_CLIENTS="16"
+    fi
+    if [ -z "$CLIENT_IDLE_TIMEOUT" ] || [ "$CLIENT_IDLE_TIMEOUT" = "null" ]; then
+        CLIENT_IDLE_TIMEOUT="300.0"
+    fi
     cat >> "$CONFIG_PATH" <<EOF
     listen:
       bind: 0:$BIND_PORT
+      max_clients: $MAX_CLIENTS
+      client_idle_timeout: $CLIENT_IDLE_TIMEOUT
 EOF
     
     VALID_DEVICES=$((VALID_DEVICES+1))

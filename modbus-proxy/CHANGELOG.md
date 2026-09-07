@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.2.8] - 2026-09-07
+
+### Added
+- **Client connection limits** - Optional `max_clients` per listener (default: 16) to prevent FD exhaustion (`Errno 24` / EMFILE)
+- **Client idle timeout** - Optional `client_idle_timeout` in seconds (default: 300) closes orphaned client sockets that stop sending requests
+- **Active client logging** - Logs `active=N/max` on connect, disconnect, reject, and idle close
+
+### Notes
+- Keep `client_idle_timeout` well above your Modbus Manager / HA poll intervals so the persistent hub session is not closed during normal idle gaps between polls
+- Set `max_clients: 0` or `client_idle_timeout: 0` to disable the respective limit (not recommended for long-running add-ons)
+
 ## [2.2.7] - 2026-05-11
 
 ### Changed

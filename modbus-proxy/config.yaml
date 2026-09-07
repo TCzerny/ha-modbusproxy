@@ -1,5 +1,5 @@
 name: "Modbus Proxy"
-version: "2.2.7"
+version: "2.2.8"
 slug: "modbus_proxy"
 description: "A powerful multi-device Modbus TCP and RTU proxy"
 arch:
@@ -71,6 +71,8 @@ options:
       bind_port: 502
       timeout: 10.0
       connection_time: 0.1
+      max_clients: 16
+      client_idle_timeout: 300.0
     - name: "RTU Device 1"
       protocol: "rtu"
       device: "/dev/ttyUSB0"
@@ -81,6 +83,8 @@ options:
       bind_port: 504
       timeout: 5.0
       connection_time: 0.1
+      max_clients: 16
+      client_idle_timeout: 300.0
     - name: "Auto-Detected Serial Device"
       protocol: "rtu"
       baudrate: 115200
@@ -91,6 +95,8 @@ options:
       timeout: 3.0
       connection_time: 0.1
       unit_id_remapping: "1<>10"
+      max_clients: 16
+      client_idle_timeout: 300.0
 schema:
   log_level: "list(info|warning|error|debug)?"
   auto_detect_device: "bool?"
@@ -111,3 +117,5 @@ schema:
       unit_id_remapping: "str?"
       timeout: "float?"
       connection_time: "float?"
+      max_clients: "int?"
+      client_idle_timeout: "float?"

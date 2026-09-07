@@ -177,6 +177,8 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `bind_port` | **Yes** | - | Local port where proxy will listen |
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID (e.g., `1: 10`) |
 | `connection_time` | No | `0.1` | Time to establish connection in seconds |
+| `max_clients` | No | `16` | Max concurrent client TCP sockets (`0` = unlimited) |
+| `client_idle_timeout` | No | `300.0` | Close idle client sockets after N seconds (`0` = disabled; keep above poll interval) |
 | `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
 
 #### RTU/Serial Modbus Parameters
@@ -193,6 +195,8 @@ Most Modbus TCP servers only allow a single client connection and reject additio
 | `unit_id_remapping` | No | - | Map incoming unit ID to target unit ID |
 | `timeout` | No | `5.0` | Connection timeout in seconds |
 | `connection_time` | No | `0.1` | Time to establish connection in seconds |
+| `max_clients` | No | `16` | Max concurrent client TCP sockets (`0` = unlimited) |
+| `client_idle_timeout` | No | `300.0` | Close idle client sockets after N seconds (`0` = disabled; keep above poll interval) |
 | `log_level` | No | `info` | Logging level: `debug`, `info`, `warning`, `error` |
 
 *`device` is optional when `auto_detect_device: true` is enabled
